@@ -40,8 +40,8 @@ export default function Bio() {
           <div className="lg:sticky lg:top-24 lg:pt-6">
             {/* Name */}
             <h1 className="font-serif text-5xl md:text-6xl font-medium text-gray-900 leading-tight">
-              Tibor
-            </h1>
+              Tibor Porgánczki
+</h1>
 
             {/* Title line */}
             <p className="mt-3 text-sm font-light tracking-[0.25em] text-gold-500 uppercase">

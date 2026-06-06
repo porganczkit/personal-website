@@ -75,18 +75,9 @@ const milestones: Milestone[] = [
     company: 'CBRE',
     location: 'Hong Kong',
     description:
-      'Joined CBRE as Head of M&A, Asia-Pacific in Hong Kong, driving cross-border acquisitions and strategic growth initiatives across one of the world\'s most dynamic real estate markets.',
+      'Joined CBRE as Head of M&A, Asia-Pacific in Hong Kong, driving cross-border acquisitions and strategic growth initiatives across one of the world\'s most dynamic real estate markets. Deals closed were among others the acquisition of a minority interest in a full-service real estate company in Malaysia and acquisition of a healthcare project management company in Australia.',
     image: '/api/drive-image?id=1egBCX-W81uM-treCzwUjszxPZy59PHUW',
     gradient: 'linear-gradient(160deg, #052215 0%, #0f4a2e 55%, #052215 100%)',
-  },
-  {
-    id: 7,
-    year: '2016',
-    role: 'M&A Director',
-    company: 'CBRE',
-    location: 'Kuala Lumpur, Malaysia',
-    description: '',
-    gradient: 'linear-gradient(160deg, #071a10 0%, #0e3320 55%, #071a10 100%)',
   },
   {
     id: 8,
