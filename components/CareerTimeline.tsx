@@ -85,8 +85,7 @@ const milestones: Milestone[] = [
     role: 'M&A Director',
     company: 'CBRE',
     location: 'Kuala Lumpur, Malaysia',
-    description:
-      'Negotiated and structured a minority acquisition in Malaysia, forming the CBRE-WTW joint venture and strengthening CBRE\'s foothold across Southeast Asia.',
+    description: '',
     gradient: 'linear-gradient(160deg, #071a10 0%, #0e3320 55%, #071a10 100%)',
   },
   {
@@ -125,7 +124,7 @@ const milestones: Milestone[] = [
   {
     id: 11,
     year: '2020',
-    role: 'FP&A Lead',
+    role: 'Acting Head of Financial Planning & Analysis',
     company: 'Wizz Air',
     location: 'Budapest, Hungary',
     description:
@@ -136,7 +135,7 @@ const milestones: Milestone[] = [
   {
     id: 12,
     year: '2022',
-    role: 'Strategic Finance Lead',
+    role: 'Financial Planning & Analysis Manager - Mobility',
     company: 'NEOM',
     location: 'Tabuk, Saudi Arabia',
     description:

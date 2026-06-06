@@ -38,14 +38,8 @@ export default function Nav() {
       }`}
     >
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-        {/* Logo */}
-        <a
-          href="#bio"
-          onClick={(e) => handleNavClick(e, '#bio')}
-          className="font-serif text-xl font-medium text-gray-900 tracking-wide hover:text-gold-600 transition-colors"
-        >
-          Tibor
-        </a>
+        {/* Logo — intentionally empty; keeps layout balance */}
+        <div />
 
         {/* Desktop links */}
         <div className="hidden md:flex items-center gap-8">
