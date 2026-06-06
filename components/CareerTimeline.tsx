@@ -75,20 +75,9 @@ const milestones: Milestone[] = [
     company: 'CBRE',
     location: 'Hong Kong',
     description:
-      'Joined CBRE as Head of M&A, Asia-Pacific in Hong Kong, driving cross-border acquisitions and strategic growth initiatives across one of the world\'s most dynamic real estate markets. Deals closed were among others the acquisition of a minority interest in a full-service real estate company in Malaysia and acquisition of a healthcare project management company in Australia.',
+      'Joined CBRE as Head of M&A, Asia-Pacific in Hong Kong, driving cross-border acquisitions and strategic growth initiatives across one of the world\'s most dynamic real estate markets.\n\nClosed deals were — among others — the acquisition of a minority interest in a full-service real estate company in Malaysia and acquisition of a healthcare project management company in Australia.',
     image: '/api/drive-image?id=1egBCX-W81uM-treCzwUjszxPZy59PHUW',
     gradient: 'linear-gradient(160deg, #052215 0%, #0f4a2e 55%, #052215 100%)',
-  },
-  {
-    id: 8,
-    year: '2017',
-    role: 'M&A Director',
-    company: 'CBRE',
-    location: 'Sydney, Australia',
-    description:
-      'Closed the acquisition of an Australian healthcare project management company, which became the cornerstone of CBRE Australia\'s healthcare division.',
-    image: '/api/drive-image?id=1tcDgT-0qQhYN7mQ7l1D_sHXwiR0IdLoj',
-    gradient: 'linear-gradient(160deg, #1a0a05 0%, #4a2205 55%, #1a0a05 100%)',
   },
   {
     id: 9,
@@ -322,10 +311,14 @@ export default function CareerTimeline() {
                   {milestone.company}&nbsp; · &nbsp;{milestone.location}
                 </p>
 
-                {/* Description */}
-                <p className="mt-6 text-base md:text-lg font-light text-white/80 leading-relaxed max-w-lg mx-auto">
-                  {milestone.description}
-                </p>
+                {/* Description — supports multi-paragraph via \n\n */}
+                <div className="mt-6 max-w-lg mx-auto space-y-4">
+                  {milestone.description.split('\n\n').filter(Boolean).map((para, i) => (
+                    <p key={i} className="text-base md:text-lg font-light text-white/80 leading-relaxed">
+                      {para}
+                    </p>
+                  ))}
+                </div>
               </div>
 
               {/* Subtle scroll hint on first milestone */}
