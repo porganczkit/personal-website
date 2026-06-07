@@ -3,6 +3,7 @@ import Head from 'next/head';
 import Nav from '../components/Nav';
 import Bio from '../components/Bio';
 import CareerTimeline from '../components/CareerTimeline';
+import AvatarChat from '../components/AvatarChat';
 
 const Home: NextPage = () => {
   return (
@@ -27,6 +28,8 @@ const Home: NextPage = () => {
           <CareerTimeline />
         </section>
       </main>
+
+      <AvatarChat />
     </>
   );
 };
