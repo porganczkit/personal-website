@@ -12,10 +12,10 @@ import { TIBOR_SYSTEM_PROMPT } from '../../lib/tibor-persona';
  * Settings → Environment Variables; locally in .env.local).
  */
 
-// The model powering the avatar. Opus is the most capable; for a public bot you
-// may prefer 'claude-haiku-4-5' (much cheaper, still very capable) or
-// 'claude-sonnet-4-6' (mid-tier) to control cost. Change this one line.
-const MODEL = 'claude-opus-4-8';
+// The model powering the avatar. Haiku is fast and cost-effective for a public
+// bot; bump to 'claude-sonnet-4-6' (mid-tier) or 'claude-opus-4-8' (most
+// capable) if you want richer answers. Change this one line.
+const MODEL = 'claude-haiku-4-5';
 
 // Guard-rails so an open bot on a public domain can't run up a surprise bill.
 const MAX_MESSAGE_CHARS = 2000; // per user message
