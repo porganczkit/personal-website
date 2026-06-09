@@ -1,29 +1,27 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import Anthropic from '@anthropic-ai/sdk';
 import { TIBOR_SYSTEM_PROMPT } from '../../lib/tibor-persona';
 
 /**
- * Tibor AI Avatar — streaming chat endpoint.
+ * Tibor AI Avatar — streaming chat endpoint (Mistral API).
  *
- * Proxies the conversation to the Claude API server-side so the API key never
+ * Proxies the conversation to the Mistral API server-side so the API key never
  * reaches the browser. Streams the reply back as plain text chunks.
  *
- * Requires the ANTHROPIC_API_KEY environment variable (set in Vercel → Project
+ * Requires the MISTRAL_API_KEY environment variable (set in Vercel → Project
  * Settings → Environment Variables; locally in .env.local).
  */
 
-// The model powering the avatar. Haiku is fast and cost-effective for a public
-// bot; bump to 'claude-sonnet-4-6' (mid-tier) or 'claude-opus-4-8' (most
-// capable) if you want richer answers. Change this one line.
-const MODEL = 'claude-haiku-4-5';
+// The model powering the avatar. mistral-small-latest is fast and cost-effective
+// for a public bot; bump to 'mistral-large-latest' for richer answers. One line.
+const MODEL = 'mistral-small-latest';
+const MISTRAL_URL = 'https://api.mistral.ai/v1/chat/completions';
 
 // Guard-rails so an open bot on a public domain can't run up a surprise bill.
 const MAX_MESSAGE_CHARS = 2000; // per user message
 const MAX_HISTORY = 20; // most recent messages kept
+const MAX_TOKENS = 1024;
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX = 15; // requests per IP per window
-
-const client = new Anthropic();
 
 // Simple in-memory rate limiter. Resets when the serverless instance recycles —
 // good enough to blunt abuse; swap for a shared store (e.g. Upstash) if needed.
@@ -68,7 +66,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.MISTRAL_API_KEY) {
     return res
       .status(500)
       .json({ error: 'The avatar is not configured yet (missing API key).' });
@@ -91,32 +89,65 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    const upstream = await fetch(MISTRAL_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        Authorization: `Bearer ${process.env.MISTRAL_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        stream: true,
+        // Mistral takes the system prompt as the first message (OpenAI-style).
+        messages: [{ role: 'system', content: TIBOR_SYSTEM_PROMPT }, ...messages],
+      }),
+    });
+
+    if (!upstream.ok || !upstream.body) {
+      const detail = await upstream.text().catch(() => '');
+      return res
+        .status(502)
+        .json({ error: `Avatar upstream error (${upstream.status}). ${detail.slice(0, 200)}` });
+    }
+
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('X-Accel-Buffering', 'no');
 
-    const stream = client.messages.stream({
-      model: MODEL,
-      max_tokens: 1024,
-      system: [
-        {
-          type: 'text',
-          text: TIBOR_SYSTEM_PROMPT,
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
-      messages,
-    });
+    // Parse the Mistral SSE stream and forward only the text deltas.
+    const reader = upstream.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
 
-    stream.on('text', (delta) => {
-      res.write(delta);
-    });
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
 
-    await stream.finalMessage();
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? ''; // keep the last partial line
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+        const data = trimmed.slice(5).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const json = JSON.parse(data);
+          const delta = json?.choices?.[0]?.delta?.content;
+          if (typeof delta === 'string' && delta) res.write(delta);
+        } catch {
+          /* ignore keep-alive / non-JSON lines */
+        }
+      }
+    }
+
     res.end();
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    // If nothing has been streamed yet we can still send a JSON error.
     if (!res.headersSent) {
       res.status(500).json({ error: `Avatar error: ${message}` });
     } else {
