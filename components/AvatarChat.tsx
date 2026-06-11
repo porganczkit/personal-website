@@ -1,9 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TIBOR AI AVATAR — floating chat widget
+// TIBOR AI AVATAR — floating chat widget with voice
 // A corner button opens a chat panel that streams replies from /api/avatar.
+// Voice in  (speech-to-text) uses the browser Web Speech API.
+// Voice out (text-to-speech) uses the browser SpeechSynthesis API.
+// Both are free, client-side, and need no backend changes.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Minimal typing for the (non-standard) Web Speech API.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+declare global {
+  interface Window {
+    SpeechRecognition?: any;
+    webkitSpeechRecognition?: any;
+  }
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 interface Message {
   role: 'user' | 'assistant';
@@ -11,7 +24,7 @@ interface Message {
 }
 
 const GREETING =
-  "Hello — I'm Tibor's AI avatar. Ask me about my career, M&A, finance, or working across Europe, Asia, and the Middle East.";
+  "Hello — I'm Tibor's AI avatar. Ask me about my career, M&A, finance, or working across Europe, Asia, and the Middle East. Tap the mic to talk to me.";
 
 export default function AvatarChat() {
   const [open, setOpen] = useState(false);
@@ -20,8 +33,18 @@ export default function AvatarChat() {
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Voice state
+  const [listening, setListening] = useState(false);
+  const [voiceOut, setVoiceOut] = useState(false); // speak replies aloud
+  const [speaking, setSpeaking] = useState(false);
+  const [sttSupported, setSttSupported] = useState(false);
+  const [ttsSupported, setTtsSupported] = useState(false);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
+  const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
 
   // Auto-scroll to the newest message.
   useEffect(() => {
@@ -33,18 +56,93 @@ export default function AvatarChat() {
     if (open) inputRef.current?.focus();
   }, [open]);
 
-  const send = async () => {
-    const text = input.trim();
+  // ── Detect capabilities + set up speech recognition ──
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    setTtsSupported('speechSynthesis' in window);
+
+    // Pick a natural English voice for the avatar (prefer a male UK/US voice).
+    if ('speechSynthesis' in window) {
+      const pickVoice = () => {
+        const voices = window.speechSynthesis.getVoices();
+        if (!voices.length) return;
+        const en = voices.filter((v) => v.lang.toLowerCase().startsWith('en'));
+        voiceRef.current =
+          en.find((v) => /(daniel|arthur|george|male|en-gb)/i.test(`${v.name} ${v.lang}`)) ||
+          en.find((v) => v.lang.toLowerCase() === 'en-gb') ||
+          en[0] ||
+          voices[0];
+      };
+      pickVoice();
+      window.speechSynthesis.onvoiceschanged = pickVoice;
+    }
+
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SR) {
+      setSttSupported(true);
+      const rec = new SR();
+      rec.lang = 'en-US';
+      rec.interimResults = true;
+      rec.continuous = false;
+      recognitionRef.current = rec;
+    }
+
+    return () => {
+      try {
+        recognitionRef.current?.abort?.();
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      } catch {
+        /* noop */
+      }
+    };
+  }, []);
+
+  // Stop any speech when the panel closes.
+  useEffect(() => {
+    if (!open && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+    }
+  }, [open]);
+
+  const speak = useCallback(
+    (text: string) => {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window) || !text.trim()) return;
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      if (voiceRef.current) utter.voice = voiceRef.current;
+      utter.rate = 1.0;
+      utter.pitch = 1.0;
+      utter.onstart = () => setSpeaking(true);
+      utter.onend = () => setSpeaking(false);
+      utter.onerror = () => setSpeaking(false);
+      window.speechSynthesis.speak(utter);
+    },
+    []
+  );
+
+  const stopSpeaking = () => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+    }
+  };
+
+  const send = async (rawText?: string, viaVoice = false) => {
+    const text = (rawText ?? input).trim();
     if (!text || streaming) return;
 
+    stopSpeaking();
     setError(null);
     const nextMessages: Message[] = [...messages, { role: 'user', content: text }];
     setMessages(nextMessages);
     setInput('');
     setStreaming(true);
-
-    // Add an empty assistant message we'll stream into.
     setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
+
+    // Speak the reply if voice-out is on, or if the user spoke this turn.
+    const shouldSpeak = (viaVoice || voiceOut) && ttsSupported;
 
     try {
       const res = await fetch('/api/avatar', {
@@ -79,10 +177,11 @@ export default function AvatarChat() {
           return copy;
         });
       }
+
+      if (shouldSpeak) speak(acc);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Something went wrong.';
       setError(msg);
-      // Drop the empty/partial assistant bubble on hard failure.
       setMessages((prev) => {
         const copy = [...prev];
         if (copy[copy.length - 1]?.role === 'assistant' && !copy[copy.length - 1].content) {
@@ -92,6 +191,46 @@ export default function AvatarChat() {
       });
     } finally {
       setStreaming(false);
+    }
+  };
+
+  // ── Microphone (speech-to-text) ──
+  const toggleMic = () => {
+    const rec = recognitionRef.current;
+    if (!rec) return;
+
+    if (listening) {
+      rec.stop();
+      return;
+    }
+
+    stopSpeaking();
+    setError(null);
+    setInput('');
+    let finalText = '';
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const transcript = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalText += transcript;
+        else interim += transcript;
+      }
+      setInput((finalText + interim).trim());
+    };
+    rec.onerror = () => setListening(false);
+    rec.onend = () => {
+      setListening(false);
+      const toSend = finalText.trim();
+      if (toSend) send(toSend, true);
+    };
+
+    try {
+      rec.start();
+      setListening(true);
+    } catch {
+      setListening(false);
     }
   };
 
@@ -134,19 +273,47 @@ export default function AvatarChat() {
             <div>
               <p className="font-serif text-sm font-medium text-gray-900">Tibor — AI Avatar</p>
               <p className="text-[11px] font-light tracking-wide text-gold-500">
-                Finance &amp; M&amp;A
+                {listening ? 'Listening…' : speaking ? 'Speaking…' : 'Finance & M&A'}
               </p>
             </div>
           </div>
-          <button
-            onClick={() => setOpen(false)}
-            aria-label="Close chat"
-            className="text-gray-400 transition-colors hover:text-gray-900"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-1">
+            {/* Voice-out toggle */}
+            {ttsSupported && (
+              <button
+                onClick={() => {
+                  if (voiceOut) stopSpeaking();
+                  setVoiceOut((v) => !v);
+                }}
+                aria-label={voiceOut ? 'Mute spoken replies' : 'Hear replies aloud'}
+                title={voiceOut ? 'Spoken replies: on' : 'Spoken replies: off'}
+                className={`rounded-lg p-2 transition-colors ${
+                  voiceOut ? 'text-gold-600 hover:text-gold-500' : 'text-gray-400 hover:text-gray-900'
+                }`}
+              >
+                {voiceOut ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                    <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" />
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                    <path d="M22 9l-6 6M16 9l6 6" />
+                  </svg>
+                )}
+              </button>
+            )}
+            <button
+              onClick={() => setOpen(false)}
+              aria-label="Close chat"
+              className="rounded-lg p-2 text-gray-400 transition-colors hover:text-gray-900"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Messages */}
@@ -178,25 +345,45 @@ export default function AvatarChat() {
             </div>
           ))}
 
-          {error && (
-            <p className="text-center text-xs font-light text-red-500">{error}</p>
-          )}
+          {error && <p className="text-center text-xs font-light text-red-500">{error}</p>}
         </div>
 
         {/* Input */}
         <div className="border-t border-gray-100 px-3 py-3">
           <div className="flex items-end gap-2">
+            {/* Mic button */}
+            {sttSupported && (
+              <button
+                onClick={toggleMic}
+                disabled={streaming}
+                aria-label={listening ? 'Stop listening' : 'Speak to Tibor'}
+                className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
+                  listening
+                    ? 'bg-red-500 text-white'
+                    : 'border border-gray-200 text-gray-700 hover:border-gray-400'
+                }`}
+              >
+                {listening && (
+                  <span className="absolute inline-flex h-10 w-10 animate-ping rounded-xl bg-red-400 opacity-40" />
+                )}
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
+                </svg>
+              </button>
+            )}
+
             <textarea
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               rows={1}
-              placeholder="Ask about my career, M&A, finance…"
+              placeholder={listening ? 'Listening…' : 'Ask about my career, M&A, finance…'}
               className="no-scrollbar max-h-28 flex-1 resize-none rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm font-light text-gray-800 outline-none transition-colors focus:border-gray-400"
             />
             <button
-              onClick={send}
+              onClick={() => send()}
               disabled={!input.trim() || streaming}
               aria-label="Send message"
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-900 text-white transition-all hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
