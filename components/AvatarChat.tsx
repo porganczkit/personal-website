@@ -2,21 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TIBOR AI AVATAR — floating chat widget with voice
-// A corner button opens a chat panel that streams replies from /api/avatar.
-// Voice in  (speech-to-text) uses the browser Web Speech API.
-// Voice out (text-to-speech) uses the browser SpeechSynthesis API.
-// Both are free, client-side, and need no backend changes.
+// Text + voice chat that streams replies from /api/avatar.
+//   Voice IN  → record with MediaRecorder, transcribe via /api/transcribe
+//               (Mistral Voxtral). Works in all browsers, including Firefox.
+//   Voice OUT → /api/speak (ElevenLabs cloned voice), with automatic fallback
+//               to the browser's built-in voice if cloning isn't configured.
 // ─────────────────────────────────────────────────────────────────────────────
-
-// Minimal typing for the (non-standard) Web Speech API.
-/* eslint-disable @typescript-eslint/no-explicit-any */
-declare global {
-  interface Window {
-    SpeechRecognition?: any;
-    webkitSpeechRecognition?: any;
-  }
-}
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 interface Message {
   role: 'user' | 'assistant';
@@ -26,6 +17,17 @@ interface Message {
 const GREETING =
   "Hello — I'm Tibor's AI avatar. Ask me about my career, M&A, finance, or working across Europe, Asia, and the Middle East. Tap the mic to talk to me.";
 
+function pickMimeType(): string | undefined {
+  if (typeof MediaRecorder === 'undefined') return undefined;
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus',
+    'audio/mp4',
+  ];
+  return candidates.find((t) => MediaRecorder.isTypeSupported(t));
+}
+
 export default function AvatarChat() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
@@ -34,63 +36,55 @@ export default function AvatarChat() {
   const [error, setError] = useState<string | null>(null);
 
   // Voice state
-  const [listening, setListening] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [voiceOut, setVoiceOut] = useState(false); // speak replies aloud
   const [speaking, setSpeaking] = useState(false);
-  const [sttSupported, setSttSupported] = useState(false);
-  const [ttsSupported, setTtsSupported] = useState(false);
+  const [micSupported, setMicSupported] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null);
-  const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
 
   // Auto-scroll to the newest message.
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, streaming]);
 
-  // Focus the input when the panel opens.
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
 
-  // ── Detect capabilities + set up speech recognition ──
+  // Detect mic capability + prepare a fallback browser voice.
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    setMicSupported(
+      !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined'
+    );
 
-    setTtsSupported('speechSynthesis' in window);
-
-    // Pick a natural English voice for the avatar (prefer a male UK/US voice).
     if ('speechSynthesis' in window) {
-      const pickVoice = () => {
+      const pick = () => {
         const voices = window.speechSynthesis.getVoices();
         if (!voices.length) return;
         const en = voices.filter((v) => v.lang.toLowerCase().startsWith('en'));
-        voiceRef.current =
+        ttsVoiceRef.current =
           en.find((v) => /(daniel|arthur|george|male|en-gb)/i.test(`${v.name} ${v.lang}`)) ||
           en.find((v) => v.lang.toLowerCase() === 'en-gb') ||
           en[0] ||
           voices[0];
       };
-      pickVoice();
-      window.speechSynthesis.onvoiceschanged = pickVoice;
-    }
-
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SR) {
-      setSttSupported(true);
-      const rec = new SR();
-      rec.lang = 'en-US';
-      rec.interimResults = true;
-      rec.continuous = false;
-      recognitionRef.current = rec;
+      pick();
+      window.speechSynthesis.onvoiceschanged = pick;
     }
 
     return () => {
       try {
-        recognitionRef.current?.abort?.();
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+        audioRef.current?.pause();
         if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       } catch {
         /* noop */
@@ -98,36 +92,69 @@ export default function AvatarChat() {
     };
   }, []);
 
-  // Stop any speech when the panel closes.
+  // Stop any audio when the panel closes.
   useEffect(() => {
-    if (!open && typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      setSpeaking(false);
-    }
+    if (!open) stopSpeaking();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const speak = useCallback(
-    (text: string) => {
-      if (typeof window === 'undefined' || !('speechSynthesis' in window) || !text.trim()) return;
-      window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(text);
-      if (voiceRef.current) utter.voice = voiceRef.current;
-      utter.rate = 1.0;
-      utter.pitch = 1.0;
-      utter.onstart = () => setSpeaking(true);
-      utter.onend = () => setSpeaking(false);
-      utter.onerror = () => setSpeaking(false);
-      window.speechSynthesis.speak(utter);
-    },
-    []
-  );
+  const browserSpeak = useCallback((text: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window) || !text.trim()) return;
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    if (ttsVoiceRef.current) utter.voice = ttsVoiceRef.current;
+    utter.onstart = () => setSpeaking(true);
+    utter.onend = () => setSpeaking(false);
+    utter.onerror = () => setSpeaking(false);
+    window.speechSynthesis.speak(utter);
+  }, []);
 
-  const stopSpeaking = () => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      setSpeaking(false);
+  function stopSpeaking() {
+    try {
+      audioRef.current?.pause();
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    } catch {
+      /* noop */
     }
-  };
+    setSpeaking(false);
+  }
+
+  // Speak via the cloned voice (/api/speak); fall back to the OS voice.
+  const speak = useCallback(
+    async (text: string) => {
+      if (!text.trim()) return;
+      stopSpeaking();
+      try {
+        const res = await fetch('/api/speak', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        if (res.status === 501) {
+          browserSpeak(text); // cloning not configured yet → OS voice
+          return;
+        }
+        if (!res.ok) throw new Error('tts failed');
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = audioRef.current ?? new Audio();
+        audioRef.current = audio;
+        audio.src = url;
+        audio.onplay = () => setSpeaking(true);
+        audio.onended = () => {
+          setSpeaking(false);
+          URL.revokeObjectURL(url);
+        };
+        audio.onerror = () => setSpeaking(false);
+        await audio.play();
+      } catch {
+        browserSpeak(text); // network/playback error → OS voice
+      }
+    },
+    [browserSpeak]
+  );
 
   const send = async (rawText?: string, viaVoice = false) => {
     const text = (rawText ?? input).trim();
@@ -141,8 +168,7 @@ export default function AvatarChat() {
     setStreaming(true);
     setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
 
-    // Speak the reply if voice-out is on, or if the user spoke this turn.
-    const shouldSpeak = (viaVoice || voiceOut) && ttsSupported;
+    const shouldSpeak = viaVoice || voiceOut;
 
     try {
       const res = await fetch('/api/avatar', {
@@ -194,44 +220,69 @@ export default function AvatarChat() {
     }
   };
 
-  // ── Microphone (speech-to-text) ──
-  const toggleMic = () => {
-    const rec = recognitionRef.current;
-    if (!rec) return;
-
-    if (listening) {
-      rec.stop();
-      return;
+  // ── Microphone: record → transcribe (Voxtral) → send ──
+  const transcribeAndSend = async (blob: Blob) => {
+    setTranscribing(true);
+    try {
+      const res = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': blob.type || 'audio/webm' },
+        body: blob,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Transcription failed.');
+      const text = (data.text || '').trim();
+      if (text) {
+        setInput(text);
+        send(text, true);
+      } else {
+        setError("I didn't catch that — please try again.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Transcription failed.');
+    } finally {
+      setTranscribing(false);
     }
+  };
 
+  const startRecording = async () => {
     stopSpeaking();
     setError(null);
-    setInput('');
-    let finalText = '';
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (e: any) => {
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const transcript = e.results[i][0].transcript;
-        if (e.results[i].isFinal) finalText += transcript;
-        else interim += transcript;
-      }
-      setInput((finalText + interim).trim());
-    };
-    rec.onerror = () => setListening(false);
-    rec.onend = () => {
-      setListening(false);
-      const toSend = finalText.trim();
-      if (toSend) send(toSend, true);
-    };
-
     try {
-      rec.start();
-      setListening(true);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const mimeType = pickMimeType();
+      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      chunksRef.current = [];
+      mr.ondataavailable = (e) => {
+        if (e.data.size) chunksRef.current.push(e.data);
+      };
+      mr.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: mr.mimeType || 'audio/webm' });
+        if (blob.size) transcribeAndSend(blob);
+      };
+      mediaRecorderRef.current = mr;
+      mr.start();
+      setRecording(true);
     } catch {
-      setListening(false);
+      setError('Microphone access was blocked. Check your browser permissions.');
+      setRecording(false);
     }
+  };
+
+  const stopRecording = () => {
+    try {
+      mediaRecorderRef.current?.stop();
+    } catch {
+      /* noop */
+    }
+    setRecording(false);
+  };
+
+  const toggleMic = () => {
+    if (recording) stopRecording();
+    else startRecording();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -240,6 +291,14 @@ export default function AvatarChat() {
       send();
     }
   };
+
+  const status = recording
+    ? 'Listening…'
+    : transcribing
+      ? 'Transcribing…'
+      : speaking
+        ? 'Speaking…'
+        : 'Finance & M&A';
 
   return (
     <>
@@ -272,38 +331,34 @@ export default function AvatarChat() {
             </span>
             <div>
               <p className="font-serif text-sm font-medium text-gray-900">Tibor — AI Avatar</p>
-              <p className="text-[11px] font-light tracking-wide text-gold-500">
-                {listening ? 'Listening…' : speaking ? 'Speaking…' : 'Finance & M&A'}
-              </p>
+              <p className="text-[11px] font-light tracking-wide text-gold-500">{status}</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
             {/* Voice-out toggle */}
-            {ttsSupported && (
-              <button
-                onClick={() => {
-                  if (voiceOut) stopSpeaking();
-                  setVoiceOut((v) => !v);
-                }}
-                aria-label={voiceOut ? 'Mute spoken replies' : 'Hear replies aloud'}
-                title={voiceOut ? 'Spoken replies: on' : 'Spoken replies: off'}
-                className={`rounded-lg p-2 transition-colors ${
-                  voiceOut ? 'text-gold-600 hover:text-gold-500' : 'text-gray-400 hover:text-gray-900'
-                }`}
-              >
-                {voiceOut ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M11 5L6 9H2v6h4l5 4V5z" />
-                    <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" />
-                  </svg>
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M11 5L6 9H2v6h4l5 4V5z" />
-                    <path d="M22 9l-6 6M16 9l6 6" />
-                  </svg>
-                )}
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (voiceOut) stopSpeaking();
+                setVoiceOut((v) => !v);
+              }}
+              aria-label={voiceOut ? 'Mute spoken replies' : 'Hear replies aloud'}
+              title={voiceOut ? 'Spoken replies: on' : 'Spoken replies: off'}
+              className={`rounded-lg p-2 transition-colors ${
+                voiceOut ? 'text-gold-600 hover:text-gold-500' : 'text-gray-400 hover:text-gray-900'
+              }`}
+            >
+              {voiceOut ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                  <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" />
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                  <path d="M22 9l-6 6M16 9l6 6" />
+                </svg>
+              )}
+            </button>
             <button
               onClick={() => setOpen(false)}
               aria-label="Close chat"
@@ -352,18 +407,18 @@ export default function AvatarChat() {
         <div className="border-t border-gray-100 px-3 py-3">
           <div className="flex items-end gap-2">
             {/* Mic button */}
-            {sttSupported && (
+            {micSupported && (
               <button
                 onClick={toggleMic}
-                disabled={streaming}
-                aria-label={listening ? 'Stop listening' : 'Speak to Tibor'}
+                disabled={streaming || transcribing}
+                aria-label={recording ? 'Stop recording' : 'Speak to Tibor'}
                 className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
-                  listening
+                  recording
                     ? 'bg-red-500 text-white'
                     : 'border border-gray-200 text-gray-700 hover:border-gray-400'
                 }`}
               >
-                {listening && (
+                {recording && (
                   <span className="absolute inline-flex h-10 w-10 animate-ping rounded-xl bg-red-400 opacity-40" />
                 )}
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -379,7 +434,7 @@ export default function AvatarChat() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               rows={1}
-              placeholder={listening ? 'Listening…' : 'Ask about my career, M&A, finance…'}
+              placeholder={recording ? 'Listening…' : 'Ask about my career, M&A, finance…'}
               className="no-scrollbar max-h-28 flex-1 resize-none rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm font-light text-gray-800 outline-none transition-colors focus:border-gray-400"
             />
             <button
