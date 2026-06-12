@@ -1,25 +1,25 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
- * Voice OUT — text-to-speech via ElevenLabs (cloned voice).
+ * Voice OUT — low-latency text-to-speech via ElevenLabs (cloned voice).
  *
- * Streams MP3 audio of the avatar's reply, spoken in Tibor's cloned voice.
- * Requires two environment variables:
- *   ELEVENLABS_API_KEY   — your ElevenLabs API key
- *   ELEVENLABS_VOICE_ID  — the id of your cloned voice
+ * Uses the ElevenLabs *streaming* endpoint and pipes audio bytes to the client
+ * as they're generated, so the browser can start playing almost immediately
+ * (instead of waiting for the whole clip). Accepts GET (?text=) so the client
+ * can play it via a progressive <audio> element, and POST (json) too.
  *
- * If either is missing, returns 501 so the client falls back to the browser's
- * built-in (OS) voice — nothing breaks before the clone is set up.
+ * Requires ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID. If either is missing,
+ * returns 501 so the client falls back to the browser's built-in OS voice.
  */
 
-// Highest-fidelity multilingual model. Swap to 'eleven_turbo_v2_5' for lower
-// latency / cost if needed.
-const MODEL = 'eleven_multilingual_v2';
+// Low-latency model for a real-time chatbot. For max fidelity (slower) use
+// 'eleven_multilingual_v2'; for the fastest/cheapest use 'eleven_flash_v2_5'.
+const MODEL = 'eleven_turbo_v2_5';
 const MAX_CHARS = 2000;
 
 // Simple in-memory rate limiter (per serverless instance).
 const hits = new Map<string, { count: number; resetAt: number }>();
-function rateLimited(ip: string, max = 20, windowMs = 60_000): boolean {
+function rateLimited(ip: string, max = 30, windowMs = 60_000): boolean {
   const now = Date.now();
   const entry = hits.get(ip);
   if (!entry || now > entry.resetAt) {
@@ -31,7 +31,7 @@ function rateLimited(ip: string, max = 20, windowMs = 60_000): boolean {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
+  if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -50,35 +50,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(429).json({ error: 'Too many requests — give it a moment.' });
   }
 
-  const text = (req.body?.text ?? '').toString().trim().slice(0, MAX_CHARS);
+  const raw = req.method === 'GET' ? req.query.text : req.body?.text;
+  const text = (typeof raw === 'string' ? raw : '').trim().slice(0, MAX_CHARS);
   if (!text) return res.status(400).json({ error: 'No text to speak.' });
 
   try {
-    const upstream = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-      {
-        method: 'POST',
-        headers: {
-          'xi-api-key': key,
-          'Content-Type': 'application/json',
-          Accept: 'audio/mpeg',
+    // Streaming endpoint + low-latency hint → first audio bytes arrive fast.
+    const url =
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream` +
+      `?optimize_streaming_latency=3&output_format=mp3_44100_128`;
+
+    const upstream = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': key,
+        'Content-Type': 'application/json',
+        Accept: 'audio/mpeg',
+      },
+      body: JSON.stringify({
+        text,
+        model_id: MODEL,
+        voice_settings: {
+          // Lower stability = more pitch/intonation variation (less monotone).
+          stability: 0.3,
+          similarity_boost: 0.85,
+          // Style adds expressiveness/emphasis. Raise toward 0.5 for more drama.
+          style: 0.4,
+          use_speaker_boost: true,
+          // Speaking rate (0.7–1.2; 1.0 = default).
+          speed: 1.0,
         },
-        body: JSON.stringify({
-          text,
-          model_id: MODEL,
-          voice_settings: {
-            // Lower stability = more pitch/intonation variation (less monotone).
-            stability: 0.3,
-            similarity_boost: 0.85,
-            // Style adds expressiveness/emphasis. Raise toward 0.5 for more drama.
-            style: 0.4,
-            use_speaker_boost: true,
-            // Speaking rate (0.7–1.2; 1.0 = default).
-            speed: 1.0,
-          },
-        }),
-      }
-    );
+      }),
+    });
 
     if (!upstream.ok || !upstream.body) {
       const detail = await upstream.text().catch(() => '');
@@ -89,6 +92,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Accel-Buffering', 'no');
 
     const reader = upstream.body.getReader();
     // eslint-disable-next-line no-constant-condition

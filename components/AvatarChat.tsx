@@ -121,37 +121,31 @@ export default function AvatarChat() {
     setSpeaking(false);
   }
 
-  // Speak via the cloned voice (/api/speak); fall back to the OS voice.
+  // Speak via the cloned voice — plays progressively from the streaming
+  // /api/speak endpoint so audio starts almost immediately. Falls back to the
+  // browser OS voice on error or if cloning isn't configured (501 → onerror).
   const speak = useCallback(
-    async (text: string) => {
-      if (!text.trim()) return;
+    (text: string) => {
+      if (!text.trim() || typeof window === 'undefined') return;
       stopSpeaking();
-      try {
-        const res = await fetch('/api/speak', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text }),
-        });
-        if (res.status === 501) {
-          browserSpeak(text); // cloning not configured yet → OS voice
-          return;
+
+      let fellBack = false;
+      const fallback = () => {
+        if (!fellBack) {
+          fellBack = true;
+          browserSpeak(text);
         }
-        if (!res.ok) throw new Error('tts failed');
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const audio = audioRef.current ?? new Audio();
-        audioRef.current = audio;
-        audio.src = url;
-        audio.onplay = () => setSpeaking(true);
-        audio.onended = () => {
-          setSpeaking(false);
-          URL.revokeObjectURL(url);
-        };
-        audio.onerror = () => setSpeaking(false);
-        await audio.play();
-      } catch {
-        browserSpeak(text); // network/playback error → OS voice
-      }
+      };
+
+      const audio = new Audio(`/api/speak?text=${encodeURIComponent(text.slice(0, 2000))}`);
+      audioRef.current = audio;
+      audio.onplaying = () => setSpeaking(true);
+      audio.onended = () => setSpeaking(false);
+      audio.onerror = () => {
+        setSpeaking(false);
+        fallback();
+      };
+      audio.play().catch(() => fallback());
     },
     [browserSpeak]
   );
