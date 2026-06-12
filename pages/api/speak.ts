@@ -12,9 +12,9 @@ import type { NextApiRequest, NextApiResponse } from 'next';
  * built-in (OS) voice — nothing breaks before the clone is set up.
  */
 
-// Low-latency multilingual model — good for a chatbot. Swap to
-// 'eleven_multilingual_v2' for max fidelity (a touch slower / pricier).
-const MODEL = 'eleven_turbo_v2_5';
+// Highest-fidelity multilingual model. Swap to 'eleven_turbo_v2_5' for lower
+// latency / cost if needed.
+const MODEL = 'eleven_multilingual_v2';
 const MAX_CHARS = 2000;
 
 // Simple in-memory rate limiter (per serverless instance).
@@ -73,6 +73,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             // Style adds expressiveness/emphasis. Raise toward 0.5 for more drama.
             style: 0.4,
             use_speaker_boost: true,
+            // Speaking rate (0.7–1.2; 1.0 = default). Below 1 = slower, to match
+            // Tibor's natural pace.
+            speed: 0.9,
           },
         }),
       }
