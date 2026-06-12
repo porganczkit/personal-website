@@ -75,7 +75,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             use_speaker_boost: true,
             // Speaking rate (0.7–1.2; 1.0 = default). Below 1 = slower, to match
             // Tibor's natural pace.
-            speed: 0.9,
+            speed: 0.95,
           },
         }),
       }
