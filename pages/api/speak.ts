@@ -67,9 +67,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           text,
           model_id: MODEL,
           voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.8,
-            style: 0.0,
+            // Lower stability = more pitch/intonation variation (less monotone).
+            stability: 0.3,
+            similarity_boost: 0.85,
+            // Style adds expressiveness/emphasis. Raise toward 0.5 for more drama.
+            style: 0.4,
             use_speaker_boost: true,
           },
         }),
