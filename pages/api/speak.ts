@@ -73,9 +73,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             // Style adds expressiveness/emphasis. Raise toward 0.5 for more drama.
             style: 0.4,
             use_speaker_boost: true,
-            // Speaking rate (0.7–1.2; 1.0 = default). Below 1 = slower, to match
-            // Tibor's natural pace.
-            speed: 0.95,
+            // Speaking rate (0.7–1.2; 1.0 = default).
+            speed: 1.0,
           },
         }),
       }
