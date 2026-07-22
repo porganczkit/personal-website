@@ -134,17 +134,6 @@ const milestones: Milestone[] = [
     image: '/api/drive-image?id=1nmq1gBt5qB38pAQdwGCjPA8ybCHKCAxg',
     gradient: 'linear-gradient(160deg, #1a0e02 0%, #5a3808 55%, #1a0e02 100%)',
   },
-  {
-    id: 14,
-    year: '2026',
-    role: 'Head of Sector Strategic Planning',
-    company: 'NEOM',
-    location: 'Tabuk, Saudi Arabia',
-    description:
-      'Played a key role in NEOM\'s first-ever board-approved business case — challenging the infrastructure capex programme and prioritising economic sector initiatives to ensure alignment with PIF\'s funding constraints.',
-    image: '/api/drive-image?id=1uL5KS1aAYjSiP6NjqpPZhUUkisjgbVa1',
-    gradient: 'linear-gradient(160deg, #0d0d0d 0%, #1f1a05 55%, #0d0d0d 100%)',
-  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
