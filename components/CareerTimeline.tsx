@@ -207,6 +207,9 @@ export default function CareerTimeline() {
         <div className="mt-5 mx-auto w-10 h-px bg-gold-500" />
       </div>
 
+      {/* Gradient fade from the white header into the dark timeline below */}
+      <div className="h-32 bg-gradient-to-b from-white to-[#1a0a05]" />
+
       {/* ── Timeline milestones ── */}
       <div ref={wrapperRef} className="relative">
 

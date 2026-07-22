@@ -37,7 +37,7 @@ export default function Bio() {
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
 
           {/* ── Left column: text ── */}
-          <div className="lg:sticky lg:top-24 lg:pt-6">
+          <div className="lg:sticky lg:top-24 lg:pt-6 animate-fade-in">
             {/* Name */}
             <h1 className="font-serif text-5xl md:text-6xl font-medium text-gray-900 leading-tight">
               Tibor Porgánczki
@@ -75,7 +75,7 @@ export default function Bio() {
 
             {/* CTA */}
             <a
-              href="mailto:[ YOUR EMAIL ]"
+              href="mailto:ptibor@cantab.net"
               className="inline-block mt-10 px-8 py-3 border border-gray-900 text-gray-900 text-sm font-light tracking-[0.18em] uppercase hover:bg-gray-900 hover:text-white transition-all duration-300"
             >
               Let&apos;s Talk
@@ -90,7 +90,10 @@ export default function Bio() {
           {/* ── Right column: photos ── */}
           <div className="grid grid-cols-2 gap-3">
             {/* Feature photo — full width */}
-            <div className="col-span-2 photo-card bg-gray-100 overflow-hidden">
+            <div
+              className="col-span-2 photo-card bg-gray-100 overflow-hidden rounded-xl shadow-sm hover:shadow-md transition-shadow animate-fade-in-up"
+              style={{ animationDelay: '120ms', animationFillMode: 'both' }}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={bioPhotos[0].src}
@@ -100,22 +103,13 @@ export default function Bio() {
               />
             </div>
 
-            {/* Photos 2 & 3 */}
-            {bioPhotos.slice(1, 3).map((photo) => (
-              <div key={photo.id} className="photo-card bg-gray-100 overflow-hidden">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={photo.src}
-                  alt={photo.alt}
-                  className="w-full aspect-square object-cover"
-                  loading="lazy"
-                />
-              </div>
-            ))}
-
-            {/* Photos 4 & 5 */}
-            {bioPhotos.slice(3).map((photo) => (
-              <div key={photo.id} className="photo-card bg-gray-100 overflow-hidden">
+            {/* Photos 2–5 */}
+            {bioPhotos.slice(1).map((photo, i) => (
+              <div
+                key={photo.id}
+                className="photo-card bg-gray-100 overflow-hidden rounded-xl shadow-sm hover:shadow-md transition-shadow animate-fade-in-up"
+                style={{ animationDelay: `${200 + i * 80}ms`, animationFillMode: 'both' }}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={photo.src}
