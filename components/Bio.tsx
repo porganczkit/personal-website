@@ -10,8 +10,8 @@ const bioPhotos = [
   },
   {
     id: 'photo-2',
-    src: driveId('18tOxP31Ltdo4Zp0SMDKwjpuAZeKoztLj'),
-    alt: 'Tibor — photo 2',
+    src: driveId('1dWrFgKFv5lSA0_fD5Us5md8eaMqfBCR2'),
+    alt: 'Tibor — portrait',
   },
   {
     id: 'photo-3',
