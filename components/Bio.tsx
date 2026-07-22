@@ -5,13 +5,13 @@ const driveId = (id: string) => `/api/drive-image?id=${id}`;
 const bioPhotos = [
   {
     id: 'photo-1',
-    src: driveId('1Iu-rL9yImM3MCa-Gur-SOyZP-fiLwJeS'),
-    alt: 'Tibor — photo 1',
+    src: driveId('1dWrFgKFv5lSA0_fD5Us5md8eaMqfBCR2'),
+    alt: 'Tibor — portrait',
   },
   {
     id: 'photo-2',
-    src: driveId('1dWrFgKFv5lSA0_fD5Us5md8eaMqfBCR2'),
-    alt: 'Tibor — portrait',
+    src: driveId('1Iu-rL9yImM3MCa-Gur-SOyZP-fiLwJeS'),
+    alt: 'Tibor — photo',
   },
   {
     id: 'photo-3',
@@ -89,21 +89,21 @@ export default function Bio() {
 
           {/* ── Right column: photos ── */}
           <div className="grid grid-cols-2 gap-3">
-            {/* Feature photo — full width */}
+            {/* Featured portrait — tall, spans two rows on the left */}
             <div
-              className="col-span-2 photo-card bg-gray-100 overflow-hidden rounded-xl shadow-sm hover:shadow-md transition-shadow animate-fade-in-up"
+              className="row-span-2 photo-card bg-gray-100 overflow-hidden rounded-xl shadow-sm hover:shadow-md transition-shadow animate-fade-in-up"
               style={{ animationDelay: '120ms', animationFillMode: 'both' }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={bioPhotos[0].src}
                 alt={bioPhotos[0].alt}
-                className="w-full aspect-[16/9] object-cover"
+                className="w-full h-full object-cover"
                 loading="lazy"
               />
             </div>
 
-            {/* Photos 2–5 */}
+            {/* Supporting photos */}
             {bioPhotos.slice(1).map((photo, i) => (
               <div
                 key={photo.id}
