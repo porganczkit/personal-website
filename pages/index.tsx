@@ -3,6 +3,7 @@ import Head from 'next/head';
 import Nav from '../components/Nav';
 import Bio from '../components/Bio';
 import CareerTimeline from '../components/CareerTimeline';
+import Projects from '../components/Projects';
 import AvatarChat from '../components/AvatarChat';
 
 const Home: NextPage = () => {
@@ -26,6 +27,9 @@ const Home: NextPage = () => {
         </section>
         <section id="timeline">
           <CareerTimeline />
+        </section>
+        <section id="projects">
+          <Projects />
         </section>
       </main>
 
