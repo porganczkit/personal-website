@@ -2,24 +2,37 @@ import { useMemo, useState } from 'react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // eVTOL FLIGHT ECONOMICS — interactive unit-economics model
-// Route anchor: Downtown Manhattan → JFK (~17 mi, ~12 min).
-// Defaults are illustrative, based on public estimates for Joby/Archer-class
-// aircraft. Everything is editable via the sliders.
+// Route anchor: Downtown Manhattan → JFK (~12 mi, ~10 min).
+//
+// Defaults are sourced from public reporting + analyst estimates (see the
+// disclaimer and the site's notes). Everything is editable via the sliders.
+//   • Seats / range:  Joby S4 & Archer Midnight (4 pax + 1 pilot)
+//   • Ticket price:   reported ~$195/seat initial; ~Uber Black; ~$50 at scale
+//   • Energy:         ~25 kWh/flight @ ~$0.25/kWh NYC commercial
+//   • Pilot:          ~$150k salary basis (heli pilot ~$135k, Glassdoor)
+//   • Maintenance:    ~$6–15/flight (eVTOL ~80–90% cheaper than helicopters)
+//   • Battery:        ~150 kWh pack, ~10k-flight life → a few $ per flight
+//   • Vertiport fees: NYC helipad $150–200, negotiated to ~$43–125 at volume
+//   • Aircraft:       Joby $1.3M target build cost (Archer implies ~$3–4M)
+//   • Airframe life:  ~150,000 flight cycles
+//   • Utilization:    ~41 flights/day at scale (default a conservative 30)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SEATS = 4; // passenger seats (pilot excluded)
-const LIFE_YEARS = 10; // aircraft economic life used for depreciation
+const LIFETIME_FLIGHTS = 150_000; // airframe cycle life used for depreciation
 
 const DEFAULTS = {
-  price: 130, // $ per seat
+  price: 150, // $ per seat
   loadFactor: 75, // %
-  energyKwh: 130, // kWh per flight
-  elecPrice: 0.2, // $ per kWh
-  pilot: 45, // $ per flight (0 ≈ autonomous)
-  maintenance: 60, // $ per flight
-  vertiport: 90, // $ per flight (take-off + landing fees)
-  aircraftPriceM: 4, // $ millions
-  flightsPerDay: 20, // per aircraft
+  energyKwh: 25, // kWh per flight
+  elecPrice: 0.25, // $ per kWh
+  pilot: 25, // $ per flight (0 ≈ autonomous)
+  maintenance: 15, // $ per flight
+  battery: 7, // $ per flight (pack amortized over cycle life)
+  vertiport: 85, // $ per flight (take-off + landing fees)
+  groundOps: 40, // $ per flight (support staff + SG&A)
+  aircraftPriceM: 1.3, // $ millions
+  flightsPerDay: 30, // per aircraft
 };
 
 type State = typeof DEFAULTS;
@@ -73,14 +86,15 @@ export default function EvtolModel() {
     const pax = SEATS * (s.loadFactor / 100);
     const revenue = pax * s.price;
     const energy = s.energyKwh * s.elecPrice;
-    const lifetimeFlights = s.flightsPerDay * 365 * LIFE_YEARS;
-    const depreciation = (s.aircraftPriceM * 1_000_000) / lifetimeFlights;
+    const depreciation = (s.aircraftPriceM * 1_000_000) / LIFETIME_FLIGHTS;
 
     const costs = [
       { label: 'Energy', value: energy },
       { label: 'Pilot', value: s.pilot },
       { label: 'Maintenance', value: s.maintenance },
+      { label: 'Battery amortization', value: s.battery },
       { label: 'Vertiport fees', value: s.vertiport },
+      { label: 'Ground ops & overhead', value: s.groundOps },
       { label: 'Aircraft depreciation', value: depreciation },
     ];
     const totalCost = costs.reduce((a, c) => a + c.value, 0);
@@ -107,7 +121,7 @@ export default function EvtolModel() {
           eVTOL Flight Economics
         </h3>
         <p className="mt-1 text-sm font-light text-gray-500">
-          Downtown Manhattan → JFK&nbsp; · &nbsp;~17 mi&nbsp; · &nbsp;~12 min
+          Downtown Manhattan → JFK&nbsp; · &nbsp;~12 mi&nbsp; · &nbsp;~10 min
         </p>
         <p className="mt-4 max-w-xl text-[0.95rem] font-light leading-relaxed text-gray-600">
           What does it cost to fly an electric air taxi across New York — and can it turn a
@@ -118,19 +132,21 @@ export default function EvtolModel() {
       <div className="grid lg:grid-cols-2">
         {/* Controls */}
         <div className="space-y-5 px-6 py-7 sm:px-8">
-          <Slider label="Ticket price / seat" value={s.price} onChange={set('price')} min={50} max={400} step={5} display={money(s.price)} />
+          <Slider label="Ticket price / seat" value={s.price} onChange={set('price')} min={40} max={400} step={5} display={money(s.price)} />
           <Slider label="Load factor" value={s.loadFactor} onChange={set('loadFactor')} min={25} max={100} step={5} display={`${s.loadFactor}%  ·  ${m.pax.toFixed(1)} pax`} />
-          <Slider label="Energy per flight" value={s.energyKwh} onChange={set('energyKwh')} min={50} max={300} step={5} display={`${s.energyKwh} kWh`} />
+          <Slider label="Energy per flight" value={s.energyKwh} onChange={set('energyKwh')} min={10} max={100} step={1} display={`${s.energyKwh} kWh`} />
           <Slider label="Electricity price" value={s.elecPrice} onChange={set('elecPrice')} min={0.05} max={0.5} step={0.01} display={`${money(s.elecPrice, 2)}/kWh`} />
           <Slider label="Pilot cost / flight" value={s.pilot} onChange={set('pilot')} min={0} max={150} step={5} display={s.pilot === 0 ? 'Autonomous' : money(s.pilot)} />
-          <Slider label="Maintenance / flight" value={s.maintenance} onChange={set('maintenance')} min={10} max={200} step={5} display={money(s.maintenance)} />
+          <Slider label="Maintenance / flight" value={s.maintenance} onChange={set('maintenance')} min={5} max={100} step={1} display={money(s.maintenance)} />
+          <Slider label="Battery amortization / flight" value={s.battery} onChange={set('battery')} min={0} max={50} step={1} display={money(s.battery)} />
           <Slider label="Vertiport fees / flight" value={s.vertiport} onChange={set('vertiport')} min={0} max={250} step={5} display={money(s.vertiport)} />
-          <Slider label="Aircraft price" value={s.aircraftPriceM} onChange={set('aircraftPriceM')} min={1} max={10} step={0.5} display={`$${s.aircraftPriceM}M`} />
-          <Slider label="Flights / day (per aircraft)" value={s.flightsPerDay} onChange={set('flightsPerDay')} min={5} max={40} step={1} display={`${s.flightsPerDay}`} />
+          <Slider label="Ground ops & overhead / flight" value={s.groundOps} onChange={set('groundOps')} min={0} max={150} step={5} display={money(s.groundOps)} />
+          <Slider label="Aircraft price" value={s.aircraftPriceM} onChange={set('aircraftPriceM')} min={0.5} max={8} step={0.1} display={`$${s.aircraftPriceM.toFixed(1)}M`} />
+          <Slider label="Flights / day (per aircraft)" value={s.flightsPerDay} onChange={set('flightsPerDay')} min={5} max={45} step={1} display={`${s.flightsPerDay}`} />
 
           <div className="flex items-center justify-between pt-1">
             <p className="text-[11px] font-light text-gray-400">
-              Fixed: {SEATS} seats · {LIFE_YEARS}-yr aircraft life
+              Fixed: {SEATS} seats · {LIFETIME_FLIGHTS.toLocaleString()}-cycle airframe life
             </p>
             <button
               onClick={() => setS(DEFAULTS)}
@@ -218,8 +234,9 @@ export default function EvtolModel() {
       {/* Disclaimer */}
       <div className="border-t border-gray-100 px-6 py-4 sm:px-8">
         <p className="text-[11px] font-light leading-relaxed text-gray-400">
-          Illustrative defaults based on public estimates for Joby / Archer-class aircraft. A
-          simplified model for exploration — not investment advice.
+          Defaults sourced from public reporting and analyst estimates — Joby &amp; Archer
+          disclosures, a published Joby unit-economics analysis, NYSERDA energy rates, and
+          Glassdoor pilot pay. A simplified model for exploration — not investment advice.
         </p>
       </div>
     </div>
