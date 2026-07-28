@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // eVTOL FLIGHT ECONOMICS — interactive unit-economics model (scenario mode)
@@ -210,10 +210,137 @@ function metrics(v: Record<Key, number>) {
   return { revenue, costs, totalCost, profit, margin, breakeven, dailyProfit, annualProfit };
 }
 
+// ── Monte Carlo (Beta-PERT sampling) ─────────────────────────────────────────
+// Standard normal via Box–Muller.
+function randn(): number {
+  let u = 0;
+  let v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+// Marsaglia–Tsang gamma sampler (shape k ≥ 1 — always true for Beta-PERT).
+function gammaSample(k: number): number {
+  const d = k - 1 / 3;
+  const c = 1 / Math.sqrt(9 * d);
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const x = randn();
+    let v = 1 + c * x;
+    if (v <= 0) continue;
+    v = v * v * v;
+    const u = Math.random();
+    if (u < 1 - 0.0331 * x * x * x * x) return d * v;
+    if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v;
+  }
+}
+// Beta-PERT sample on [a, b] with mode c (shape weight λ = 4).
+function betaPertSample(a: number, c: number, b: number): number {
+  if (b <= a) return a;
+  const alpha = 1 + (4 * (c - a)) / (b - a);
+  const beta = 1 + (4 * (b - c)) / (b - a);
+  const g1 = gammaSample(alpha);
+  const g2 = gammaSample(beta);
+  return a + (g1 / (g1 + g2)) * (b - a);
+}
+
+type MCResult = {
+  trials: number;
+  mean: number;
+  p5: number;
+  p50: number;
+  p95: number;
+  pLoss: number;
+  counts: number[];
+  binMin: number;
+  binMax: number;
+};
+
+function runMonteCarlo(ranges: Ranges, trials = 10_000, bins = 28): MCResult {
+  const profits = new Float64Array(trials);
+  const keys = Object.keys(ranges) as Key[];
+  let sum = 0;
+  let losses = 0;
+  for (let t = 0; t < trials; t++) {
+    const v = {} as Record<Key, number>;
+    for (const k of keys) {
+      const { low, high } = ranges[k];
+      v[k] = betaPertSample(low, (low + high) / 2, high);
+    }
+    const p = metrics(v).profit;
+    profits[t] = p;
+    sum += p;
+    if (p < 0) losses++;
+  }
+  const sorted = Float64Array.from(profits).sort();
+  const q = (f: number) => sorted[Math.min(trials - 1, Math.max(0, Math.floor(f * (trials - 1))))];
+  const binMin = sorted[0];
+  const binMax = sorted[trials - 1];
+  const span = binMax - binMin || 1;
+  const counts = new Array(bins).fill(0);
+  for (let t = 0; t < trials; t++) {
+    let i = Math.floor(((profits[t] - binMin) / span) * bins);
+    if (i >= bins) i = bins - 1;
+    if (i < 0) i = 0;
+    counts[i] += 1;
+  }
+  return {
+    trials,
+    mean: sum / trials,
+    p5: q(0.05),
+    p50: q(0.5),
+    p95: q(0.95),
+    pLoss: losses / trials,
+    counts,
+    binMin,
+    binMax,
+  };
+}
+
+function Histogram({ counts, min, max }: { counts: number[]; min: number; max: number }) {
+  const maxCount = Math.max(...counts, 1);
+  const binWidth = (max - min || 1) / counts.length;
+  return (
+    <div>
+      <div className="flex h-36 items-end gap-px">
+        {counts.map((c, i) => {
+          const isLoss = min + (i + 0.5) * binWidth < 0;
+          return (
+            <div
+              key={i}
+              className={`flex-1 rounded-t-sm ${isLoss ? 'bg-red-400/70' : 'bg-gold-400'}`}
+              style={{ height: `${(c / maxCount) * 100}%` }}
+            />
+          );
+        })}
+      </div>
+      <div className="mt-1.5 flex justify-between text-[10px] font-light tabular-nums text-gray-400">
+        <span>{smoney(min)}</span>
+        <span>break-even $0</span>
+        <span>{smoney(max)}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function EvtolModel() {
   const [r, setR] = useState<Ranges>(DEFAULT_RANGES);
+  const [mc, setMc] = useState<MCResult | null>(null);
+  const [running, setRunning] = useState(false);
   const setBound = (key: Key, bound: keyof Bounds) => (val: number) =>
     setR((prev) => ({ ...prev, [key]: { ...prev[key], [bound]: val } }));
+
+  // Clear stale simulation results whenever the input ranges change.
+  useEffect(() => setMc(null), [r]);
+
+  const runSim = () => {
+    setRunning(true);
+    // Let the "Running…" label paint before the (brief) synchronous compute.
+    setTimeout(() => {
+      setMc(runMonteCarlo(r));
+      setRunning(false);
+    }, 20);
+  };
 
   const { base, opt, pess } = useMemo(() => {
     const resolve = (dir: 'base' | 'opt' | 'pess'): Record<Key, number> => {
@@ -396,6 +523,63 @@ export default function EvtolModel() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Monte Carlo simulation */}
+      <div className="border-t border-gray-100 px-6 py-7 sm:px-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-light uppercase tracking-[0.25em] text-gold-500">
+              Monte Carlo simulation
+            </p>
+            <p className="mt-1 text-sm font-light text-gray-500">
+              10,000 trials · Beta-PERT sampling over each range (peak at the base case)
+            </p>
+          </div>
+          <button
+            onClick={runSim}
+            disabled={running}
+            className="rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-light tracking-wide text-white transition-colors hover:bg-gray-700 disabled:opacity-50"
+          >
+            {running ? 'Running…' : mc ? 'Re-run' : 'Run simulation'}
+          </button>
+        </div>
+
+        {mc && (
+          <div className="mt-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-xl bg-gray-50 p-4 ring-1 ring-gray-100">
+                <p className="text-[10px] font-light uppercase tracking-widest text-gray-400">Prob. of loss</p>
+                <p className={`mt-1 font-serif text-2xl font-medium tabular-nums ${mc.pLoss > 0.33 ? 'text-red-500' : 'text-gray-900'}`}>
+                  {(mc.pLoss * 100).toFixed(1)}%
+                </p>
+              </div>
+              <div className="rounded-xl bg-gray-50 p-4 ring-1 ring-gray-100">
+                <p className="text-[10px] font-light uppercase tracking-widest text-gray-400">P5 · downside</p>
+                <p className="mt-1 font-serif text-2xl font-medium tabular-nums text-gray-900">{smoney(mc.p5)}</p>
+              </div>
+              <div className="rounded-xl bg-gray-50 p-4 ring-1 ring-gray-100">
+                <p className="text-[10px] font-light uppercase tracking-widest text-gray-400">Median · P50</p>
+                <p className="mt-1 font-serif text-2xl font-medium tabular-nums text-gray-900">{smoney(mc.p50)}</p>
+              </div>
+              <div className="rounded-xl bg-gray-50 p-4 ring-1 ring-gray-100">
+                <p className="text-[10px] font-light uppercase tracking-widest text-gray-400">P95 · upside</p>
+                <p className="mt-1 font-serif text-2xl font-medium tabular-nums text-gray-900">{smoney(mc.p95)}</p>
+              </div>
+            </div>
+
+            <p className="mt-6 text-[11px] font-light uppercase tracking-widest text-gray-400">
+              Profit / flight distribution
+            </p>
+            <div className="mt-3">
+              <Histogram counts={mc.counts} min={mc.binMin} max={mc.binMax} />
+            </div>
+            <p className="mt-3 text-[11px] font-light leading-relaxed text-gray-400">
+              Mean {smoney(mc.mean)} / flight. Each driver is sampled independently — real-world
+              correlations between drivers are not modelled.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Disclaimer + sources */}
