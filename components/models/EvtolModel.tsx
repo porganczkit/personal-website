@@ -56,6 +56,65 @@ const CONTROLS: {
   { key: 'flightsPerDay', label: 'Flights / day (per aircraft)', min: 5, max: 45, step: 1, fmt: (v) => `${v}` },
 ];
 
+// Verified public sources behind the default ranges.
+const SOURCES: { note: string; name: string; url: string }[] = [
+  {
+    note: 'Route & flight time',
+    name: 'BloombergNEF — Manhattan to JFK in 7 minutes',
+    url: 'https://about.bnef.com/insights/clean-transport/manhattan-to-jfk-in-7-minutes-in-affordable-electric-air-taxi/',
+  },
+  {
+    note: 'Ticket price (~$195/seat, 4 seats)',
+    name: 'Simple Flying — Joby’s first JFK–Manhattan flights',
+    url: 'https://simpleflying.com/joby-first-flights-jfk-manhattan/',
+  },
+  {
+    note: 'Ticket price (~Uber Black)',
+    name: 'Fox News — air-taxi ride pricing',
+    url: 'https://www.foxnews.com/travel/air-taxis-cut-hour-long-commutes-minutes-riders-may-shocked-price',
+  },
+  {
+    note: 'Cost breakdown (pilot, fees, utilization, airframe life)',
+    name: 'Risk Premium Research — Joby: Unit Economics',
+    url: 'https://riskpremiumresearch.substack.com/p/joby-unit-economics',
+  },
+  {
+    note: 'Energy per flight',
+    name: 'Risk Premium Research — Joby Unit Economics: Energy Consumption',
+    url: 'https://riskpremiumresearch.substack.com/p/joby-unit-economics-energy-consumption',
+  },
+  {
+    note: 'Energy efficiency (academic)',
+    name: 'PNAS / PMC — energy-efficient battery-powered urban aircraft',
+    url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC8609345/',
+  },
+  {
+    note: 'Maintenance & operating cost',
+    name: 'Vertical Magazine — why Uber thinks eVTOLs will be affordable',
+    url: 'https://verticalmag.com/news/why-uber-thinks-evtol-air-taxis-will-be-affordable/',
+  },
+  {
+    note: 'Cost trajectory',
+    name: 'ARK Invest — electric air-taxi cost analysis',
+    url: 'https://www.ark-invest.com/articles/analyst-research/electric-air-taxi-cost-drop',
+  },
+  {
+    note: 'Aircraft price / valuation',
+    name: 'Kerrisdale Capital — Joby Aviation report (PDF)',
+    url: 'https://www.kerrisdalecap.com/wp-content/uploads/2023/10/Joby-Aviation-JOBY.pdf',
+  },
+  {
+    note: 'Electricity price',
+    name: 'NYSERDA — NY commercial electricity rates',
+    url: 'https://www.nyserda.ny.gov/Energy-Prices/Electricity/Monthly-Avg-Electricity-Commercial',
+  },
+  {
+    note: 'Pilot pay',
+    name: 'Glassdoor — helicopter pilot salary',
+    url: 'https://www.glassdoor.com/Salaries/helicopter-pilot-salary-SRCH_KO0,16.htm',
+  },
+];
+
 function money(v: number, dp = 0) {
   return `$${v.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
 }
@@ -339,13 +398,32 @@ export default function EvtolModel() {
         </div>
       </div>
 
-      {/* Disclaimer */}
+      {/* Disclaimer + sources */}
       <div className="border-t border-gray-100 px-6 py-4 sm:px-8">
         <p className="text-[11px] font-light leading-relaxed text-gray-400">
-          Default ranges sourced from public reporting and analyst estimates — Joby &amp; Archer
-          disclosures, a published Joby unit-economics analysis, NYSERDA energy rates, and
-          Glassdoor pilot pay. A simplified model for exploration — not investment advice.
+          A simplified model for exploration — not investment advice. Default ranges are drawn
+          from the public sources below.
         </p>
+        <details className="mt-2">
+          <summary className="cursor-pointer select-none text-[11px] font-light uppercase tracking-widest text-gray-500 transition-colors hover:text-gold-600">
+            Sources &amp; references
+          </summary>
+          <ul className="mt-3 space-y-1.5">
+            {SOURCES.map((s) => (
+              <li key={s.url} className="text-[11px] font-light leading-relaxed text-gray-500">
+                <span className="text-gray-400">{s.note} — </span>
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-600 underline decoration-gray-300 underline-offset-2 transition-colors hover:text-gold-600"
+                >
+                  {s.name}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </details>
       </div>
     </div>
   );
