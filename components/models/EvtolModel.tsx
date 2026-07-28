@@ -336,6 +336,22 @@ function Histogram({ counts, min, max }: { counts: number[]; min: number; max: n
         )}
         <span className="absolute right-0 top-0">{smoney(max)}</span>
       </div>
+      {/* Axis caption — makes clear the horizontal scale is $ per flight */}
+      <p className="mt-2 text-center text-[10px] font-light uppercase tracking-widest text-gray-400">
+        ← Profit / flight →
+      </p>
+      {/* Legend */}
+      <div className="mt-2 flex items-center justify-center gap-4 text-[10px] font-light text-gray-400">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-sm bg-red-400/70" />
+          Loss
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-sm bg-gold-400" />
+          Profit
+        </span>
+        <span>Bar height = share of trials</span>
+      </div>
     </div>
   );
 }
