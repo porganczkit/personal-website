@@ -299,10 +299,14 @@ function runMonteCarlo(ranges: Ranges, trials = 10_000, bins = 28): MCResult {
 
 function Histogram({ counts, min, max }: { counts: number[]; min: number; max: number }) {
   const maxCount = Math.max(...counts, 1);
-  const binWidth = (max - min || 1) / counts.length;
+  const span = max - min || 1;
+  const binWidth = span / counts.length;
+  // Position of the $0 break-even line, only meaningful when 0 is within range.
+  const zeroInRange = min < 0 && max > 0;
+  const zeroPct = ((0 - min) / span) * 100;
   return (
     <div>
-      <div className="flex h-36 items-end gap-px">
+      <div className="relative flex h-36 items-end gap-px">
         {counts.map((c, i) => {
           const isLoss = min + (i + 0.5) * binWidth < 0;
           return (
@@ -313,11 +317,24 @@ function Histogram({ counts, min, max }: { counts: number[]; min: number; max: n
             />
           );
         })}
+        {zeroInRange && (
+          <div
+            className="pointer-events-none absolute bottom-0 top-0 border-l border-dashed border-gray-500"
+            style={{ left: `${zeroPct}%` }}
+          />
+        )}
       </div>
-      <div className="mt-1.5 flex justify-between text-[10px] font-light tabular-nums text-gray-400">
-        <span>{smoney(min)}</span>
-        <span>break-even $0</span>
-        <span>{smoney(max)}</span>
+      <div className="relative mt-1.5 h-4 text-[10px] font-light tabular-nums text-gray-400">
+        <span className="absolute left-0 top-0">{smoney(min)}</span>
+        {zeroInRange && (
+          <span
+            className="absolute top-0 -translate-x-1/2 whitespace-nowrap text-gray-600"
+            style={{ left: `${zeroPct}%` }}
+          >
+            $0 break-even
+          </span>
+        )}
+        <span className="absolute right-0 top-0">{smoney(max)}</span>
       </div>
     </div>
   );
