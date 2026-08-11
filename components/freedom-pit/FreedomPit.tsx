@@ -282,7 +282,7 @@ function TitleScreen({ onStart, best }: { onStart: () => void; best: number | nu
 function Controls() {
   const keys: [string, string][] = [
     ['W A S D', 'Move'],
-    ['J / Space', 'Dig, dump, load'],
+    ['Space', 'Dig, dump, load'],
     ['K', 'Swing the shovel'],
     ['B', 'Pay a bribe'],
     ['Esc', 'Pause'],

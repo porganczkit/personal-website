@@ -67,7 +67,7 @@ shadow when empty, level with the ground when full.
 2. Walk to the pit edge, press **dump** → sand goes into the nearest segment.
 3. Delivered volume counts toward the quota. Fill the quota → **freedom**.
 
-WASD/arrows to move (8-way), `J`/space to dig-and-dump (context-sensitive:
+WASD/arrows to move (8-way), `Space` to dig-and-dump (context-sensitive:
 digs on sand, dumps at the pit), `K` to swing the shovel at a scorpion.
 
 ### The Freedom Timer

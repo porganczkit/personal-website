@@ -35,7 +35,7 @@ describe('keyboard input', () => {
     // Dispatched at document.body — exactly what a real key press does when the
     // page has just been clicked and focus landed on the body.
     document.body.dispatchEvent(
-      new KeyboardEvent('keydown', { code: 'KeyJ', key: 'j', bubbles: true })
+      new KeyboardEvent('keydown', { code: 'Space', key: ' ', bubbles: true })
     );
     expect(source.state.action).toBe(true);
   });
@@ -45,7 +45,6 @@ describe('keyboard input', () => {
     ['KeyS', 's', 'down'],
     ['KeyA', 'a', 'left'],
     ['KeyD', 'd', 'right'],
-    ['KeyJ', 'j', 'action'],
     ['Space', ' ', 'action'],
     ['KeyK', 'k', 'attack'],
     ['KeyB', 'b', 'bribe'],
@@ -62,16 +61,22 @@ describe('keyboard input', () => {
   it('works when the event carries only `key` and no `code`', () => {
     // Some input methods, remote desktops and automation send it this way.
     source = attachInput();
-    press({ key: 'j' });
+    press({ key: ' ' });
     expect(source.state.action).toBe(true);
-    release({ key: 'j' });
+    release({ key: ' ' });
     expect(source.state.action).toBe(false);
   });
 
   it('works when the event carries only `code` and no `key`', () => {
     source = attachInput();
-    press({ code: 'KeyJ' });
+    press({ code: 'Space' });
     expect(source.state.action).toBe(true);
+  });
+
+  it('no longer answers to J, which has been retired in favour of Space', () => {
+    source = attachInput();
+    press({ code: 'KeyJ', key: 'j' });
+    expect(source.state.action).toBe(false);
   });
 
   it('swallows the keys that would otherwise scroll the page', () => {
@@ -100,8 +105,9 @@ describe('keyboard input', () => {
   it('releases every key when the window loses focus, so none stick down', () => {
     source = attachInput();
     press({ code: 'KeyD', key: 'd' });
-    press({ code: 'KeyJ', key: 'j' });
+    press({ code: 'Space', key: ' ' });
     expect(source.state.right).toBe(true);
+    expect(source.state.action).toBe(true);
 
     window.dispatchEvent(new Event('blur'));
 
