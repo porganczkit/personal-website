@@ -3,6 +3,8 @@ export { createGame, step, freedomProgress, FIXED_DT } from './sim';
 export { totalFill, segmentAtX, segmentCentreX, deposit, erode } from './pit';
 export { createWind, updateWind, isGusting, progress } from './wind';
 export { actionHint, scorpionInRange } from './hints';
+export { windSoundParams } from './windsound';
+export type { WindSoundParams } from './windsound';
 export {
   atPitEdge,
   nearestLoader,

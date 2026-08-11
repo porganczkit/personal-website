@@ -154,6 +154,25 @@ export const CONFIG = {
   economy: {
     coinsPerCubicMetre: 5,
   },
+
+  /**
+   * The wind is synthesised, not sampled: brown noise through a low-pass whose
+   * cutoff and level track the wind force, with an LFO breathing over the top.
+   * Pulse rate rises with force, so a gale sounds hurried as well as loud.
+   */
+  audio: {
+    maxGain: 0.42,
+    minCutoff: 260, // Hz — calm air is a distant rumble
+    maxCutoff: 1950, // Hz — a gale hisses
+    minPulse: 0.16, // Hz — one slow breath every six seconds
+    maxPulse: 0.9,
+    /** Depth of the pulse, as a fraction of the current level. */
+    minDepth: 0.35,
+    maxDepth: 0.65,
+    gustBoost: 1.18,
+    /** Seconds for the level to chase a change — long enough to avoid clicks. */
+    smoothing: 0.35,
+  },
 } as const;
 
 export type Config = typeof CONFIG;

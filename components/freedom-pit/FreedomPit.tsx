@@ -8,10 +8,12 @@ import { attachInput } from './input';
 import type { InputSource } from './input';
 import { draw } from './render';
 import { useGameLoop } from './useGameLoop';
+import { WindAudio, isAudioSupported } from './windAudio';
 
 type Screen = 'title' | 'playing' | 'paused' | 'won' | 'lost';
 
 const BEST_KEY = 'freedom-pit:best-seconds';
+const MUTED_KEY = 'freedom-pit:muted';
 const HUD_INTERVAL = 0.1; // seconds — 10 Hz is plenty for numbers
 
 export default function FreedomPit() {
@@ -19,7 +21,9 @@ export default function FreedomPit() {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<GameState | null>(null);
   const inputRef = useRef<InputSource | null>(null);
+  const audioRef = useRef<WindAudio | null>(null);
   const hudClock = useRef(0);
+  const [muted, setMuted] = useState(false);
 
   const [screen, setScreen] = useState<Screen>('title');
   const [hud, setHud] = useState<HudModel | null>(null);
@@ -41,6 +45,7 @@ export default function FreedomPit() {
     try {
       const stored = window.localStorage.getItem(BEST_KEY);
       if (stored) setBest(Number(stored));
+      setMuted(window.localStorage.getItem(MUTED_KEY) === '1');
     } catch {
       // Private mode or storage disabled — a missing best time is not an error.
     }
@@ -88,15 +93,49 @@ export default function FreedomPit() {
     // console — `freedomPitInput.state` is the quickest way to tell a dead key
     // binding apart from a dead game loop.
     if (new URLSearchParams(window.location.search).has('debug')) {
-      const w = window as unknown as { freedomPit?: unknown; freedomPitInput?: unknown };
+      const w = window as unknown as {
+        freedomPit?: unknown;
+        freedomPitInput?: unknown;
+        freedomPitAudio?: unknown;
+      };
       w.freedomPit = gameRef;
       w.freedomPitInput = inputRef;
+      w.freedomPitAudio = audioRef;
     }
     hudClock.current = 0;
     setHud(readHud(gameRef.current));
     setScreen('playing');
     containerRef.current?.focus();
+    // This click is the user gesture the autoplay policy requires.
+    void audioRef.current?.start();
   }, []);
+
+  // The audio graph cannot be built before a user gesture, so it is created on
+  // the click that starts the shift and torn down with the component.
+  useEffect(() => {
+    if (!isDesktop) return;
+    const audio = new WindAudio();
+    audioRef.current = audio;
+    return () => {
+      audio.dispose();
+      audioRef.current = null;
+    };
+  }, [isDesktop]);
+
+  useEffect(() => {
+    audioRef.current?.setMuted(muted);
+    try {
+      window.localStorage.setItem(MUTED_KEY, muted ? '1' : '0');
+    } catch {
+      // Not being able to remember the preference is not worth failing over.
+    }
+  }, [muted]);
+
+  // Silence while paused or finished; the wind belongs to the shift.
+  useEffect(() => {
+    if (screen === 'playing') void audioRef.current?.resume();
+    else void audioRef.current?.suspend();
+  }, [screen]);
 
   const resume = useCallback(() => {
     setScreen('playing');
@@ -127,6 +166,7 @@ export default function FreedomPit() {
       if (hudClock.current >= HUD_INTERVAL) {
         hudClock.current = 0;
         setHud(readHud(game));
+        audioRef.current?.setForce(game.wind.force, game.time < game.wind.gustUntil);
       }
 
       if (game.phase !== 'playing') {
@@ -178,6 +218,18 @@ export default function FreedomPit() {
         <canvas ref={canvasRef} className="block h-full w-full" />
 
         {screen === 'playing' && hud && <Hud hud={hud} />}
+
+        {isAudioSupported() && (
+          <button
+            onClick={() => setMuted((m) => !m)}
+            aria-pressed={muted}
+            aria-label={muted ? 'Unmute the wind' : 'Mute the wind'}
+            title={muted ? 'Unmute the wind' : 'Mute the wind'}
+            className="absolute bottom-3 right-3 z-10 rounded-sm border border-white/20 bg-black/50 px-2.5 py-1.5 text-sm text-white/70 backdrop-blur-sm transition-colors hover:border-gold-400 hover:text-gold-400"
+          >
+            {muted ? '🔇' : '🔊'}
+          </button>
+        )}
 
         {screen === 'title' && <TitleScreen onStart={start} best={best} />}
 
