@@ -61,9 +61,8 @@ export default function FreedomPit() {
   }, [isDesktop]);
 
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el || !isDesktop) return;
-    const source = attachInput(el);
+    if (!isDesktop) return;
+    const source = attachInput();
     inputRef.current = source;
     return () => {
       source.detach();
@@ -71,11 +70,27 @@ export default function FreedomPit() {
     };
   }, [isDesktop]);
 
+  // Pause when the tab is hidden, so you do not come back to a corpse.
+  useEffect(() => {
+    const onHidden = () => {
+      if (document.hidden) {
+        inputRef.current?.release();
+        setScreen((s) => (s === 'playing' ? 'paused' : s));
+      }
+    };
+    document.addEventListener('visibilitychange', onHidden);
+    return () => document.removeEventListener('visibilitychange', onHidden);
+  }, []);
+
   const start = useCallback(() => {
     gameRef.current = createGame((Math.random() * 2 ** 31) >>> 0);
-    // ?debug=1 exposes the live state for poking at from the console.
+    // ?debug=1 exposes the live state and the raw input for poking at from the
+    // console — `freedomPitInput.state` is the quickest way to tell a dead key
+    // binding apart from a dead game loop.
     if (new URLSearchParams(window.location.search).has('debug')) {
-      (window as unknown as { freedomPit?: unknown }).freedomPit = gameRef;
+      const w = window as unknown as { freedomPit?: unknown; freedomPitInput?: unknown };
+      w.freedomPit = gameRef;
+      w.freedomPitInput = inputRef;
     }
     hudClock.current = 0;
     setHud(readHud(gameRef.current));
@@ -147,12 +162,6 @@ export default function FreedomPit() {
     onRender,
   });
 
-  // Losing focus mid-shift pauses rather than letting scorpions eat you.
-  const onBlur = useCallback(() => {
-    inputRef.current?.release();
-    setScreen((s) => (s === 'playing' ? 'paused' : s));
-  }, []);
-
   if (isDesktop === null) return <div className="min-h-[60vh]" />;
   if (!isDesktop) return <DesktopOnly />;
 
@@ -163,7 +172,6 @@ export default function FreedomPit() {
       <div
         ref={containerRef}
         tabIndex={0}
-        onBlur={onBlur}
         className="relative w-full overflow-hidden rounded-sm bg-[#3d2c18] shadow-2xl outline-none ring-gold-400/60 focus-visible:ring-2"
         style={{ aspectRatio: `${CONFIG.view.width} / ${CONFIG.view.height}` }}
       >
