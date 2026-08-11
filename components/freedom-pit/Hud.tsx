@@ -1,4 +1,4 @@
-import { CONFIG, freedomProgress, totalFill } from '../../lib/freedom-pit';
+import { CONFIG, actionHint, freedomProgress, scorpionInRange, totalFill } from '../../lib/freedom-pit';
 import type { GameState } from '../../lib/freedom-pit';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -21,6 +21,8 @@ export interface HudModel {
   seconds: number;
   confronting: boolean;
   canAffordBribe: boolean;
+  hint: string | null;
+  scorpionNear: boolean;
   messages: { id: number; text: string; kind: string }[];
 }
 
@@ -40,6 +42,8 @@ export function readHud(s: GameState): HudModel {
     seconds: s.time,
     confronting: s.boss?.state === 'confronting',
     canAffordBribe: s.coins >= CONFIG.boss.bribeCost,
+    hint: actionHint(s),
+    scorpionNear: scorpionInRange(s),
     messages: s.messages.map((m) => ({ id: m.id, text: m.text, kind: m.kind })),
   };
 }
@@ -124,6 +128,22 @@ export default function Hud({ hud }: { hud: HudModel }) {
           </span>
           <span className="ml-auto font-mono text-white/50">{formatClock(hud.seconds)}</span>
         </div>
+      </div>
+
+      {/* What you can do right now. Without this, an action with a proximity
+          requirement and a hold time is indistinguishable from a dead key. */}
+      <div className="pointer-events-none absolute inset-x-0 top-[62%] flex justify-center">
+        {hud.scorpionNear ? (
+          <span className="rounded-sm bg-red-900/85 px-4 py-2 text-sm font-medium text-red-50 shadow-lg">
+            Press K to swing
+          </span>
+        ) : (
+          hud.hint && (
+            <span className="rounded-sm bg-black/60 px-4 py-2 text-sm font-light text-white/90 shadow-lg backdrop-blur-sm">
+              {hud.hint}
+            </span>
+          )
+        )}
       </div>
 
       <div className="space-y-2">

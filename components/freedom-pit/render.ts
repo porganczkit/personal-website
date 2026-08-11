@@ -113,9 +113,26 @@ function drawPit(ctx: CanvasRenderingContext2D, state: GameState, camX: number, 
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
-function drawMound(ctx: CanvasRenderingContext2D, x: number, y: number, volume: number): void {
+function drawMound(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  volume: number,
+  inRange: boolean
+): void {
   const scale = 0.45 + 0.55 * Math.min(1, volume / CONFIG.mounds.volume);
   const r = CONFIG.mounds.radius * scale;
+
+  // Being fractionally out of reach used to be silent. Now the mound tells you.
+  if (inRange) {
+    ctx.strokeStyle = 'rgba(212,168,83,0.9)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.ellipse(x, y, r + 8, r * 0.72 + 7, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
 
   ctx.fillStyle = 'rgba(0,0,0,0.16)';
   ctx.beginPath();
@@ -171,8 +188,26 @@ function drawWorker(ctx: CanvasRenderingContext2D, state: GameState, x: number, 
 
   const angle = Math.atan2(p.dirY, p.dirX);
 
-  // Shovel: swings through an arc as the blow lands.
+  // The swept arc, drawn on every swing whether or not it connects — a miss
+  // has to look like a miss, not like a key that did nothing.
   const swung = p.swingActive > 0;
+  if (swung) {
+    const t = 1 - p.swingActive / CONFIG.player.swingDuration;
+    ctx.fillStyle = `rgba(255,240,205,${0.35 * (1 - t)})`;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.arc(
+      x,
+      y,
+      CONFIG.player.swingRange,
+      angle - CONFIG.player.swingHalfAngle,
+      angle + CONFIG.player.swingHalfAngle
+    );
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Shovel: swings through an arc as the blow lands.
   const t = swung ? 1 - p.swingActive / CONFIG.player.swingDuration : 0;
   const shovelAngle = angle + (swung ? -0.9 + t * 1.8 : 0.45);
   const sx = x + Math.cos(shovelAngle) * (r + 16);
@@ -205,6 +240,21 @@ function drawWorker(ctx: CanvasRenderingContext2D, state: GameState, x: number, 
     ctx.beginPath();
     ctx.arc(x - Math.cos(angle) * 8, y - Math.sin(angle) * 8, 5, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  // Dig progress. Holding Space for four tenths of a second used to produce no
+  // feedback whatsoever, which read as the key being dead.
+  if (p.digProgress > 0) {
+    const t = Math.min(1, p.digProgress / CONFIG.player.digTime);
+    ctx.strokeStyle = 'rgba(0,0,0,0.30)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(x, y - 26, 11, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = GOLD;
+    ctx.beginPath();
+    ctx.arc(x, y - 26, 11, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * t);
+    ctx.stroke();
   }
 
   ctx.globalAlpha = 1;
@@ -403,9 +453,12 @@ export function draw(
     if (l.x < camX - 80 || l.x > camX + w + 80) continue;
     drawLoader(ctx, l.x - camX, l.y);
   }
+  const digReach = CONFIG.player.reach + CONFIG.mounds.radius;
   for (const m of state.mounds) {
     if (m.x < camX - 60 || m.x > camX + w + 60) continue;
-    drawMound(ctx, m.x - camX, m.y, m.volume);
+    const inRange =
+      p.mode === 'shovel' && p.load === 0 && Math.hypot(m.x - p.x, m.y - p.y) <= digReach;
+    drawMound(ctx, m.x - camX, m.y, m.volume, inRange);
   }
 
   // Painter's algorithm, so things nearer the bottom overlap what is behind.

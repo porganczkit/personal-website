@@ -39,7 +39,9 @@ export const CONFIG = {
     speed: 170,
     accel: 1400,
     radius: 14,
-    reach: 34, // how close to a mound you must stand to dig
+    /** How close to a mound you must stand to dig. Generous on purpose: being
+     * fractionally out of range is indistinguishable from a broken key. */
+    reach: 46,
     dumpReach: 30, // how close to the pit edge you must stand to dump
     digTime: 0.4,
     shovelLoad: 0.5, // m³ per shovel

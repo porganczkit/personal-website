@@ -233,6 +233,26 @@ export function trySwing(state: GameState): void {
   p.swingCooldown = CONFIG.player.swingCooldown;
   p.swingActive = CONFIG.player.swingDuration;
   p.swingWindup = CONFIG.player.swingWindup;
+
+  // Turn to whatever is closest before committing. Facing otherwise only
+  // changes when you *move*, so standing still and swinging sent the shovel
+  // wherever you last walked — it read as the key doing nothing at all.
+  let closest: Scorpion | null = null;
+  let bestD = CONFIG.player.swingRange + CONFIG.scorpion.radius;
+  for (const s of state.scorpions) {
+    const d = Math.hypot(s.x - p.x, s.y - p.y);
+    if (d <= bestD) {
+      bestD = d;
+      closest = s;
+    }
+  }
+  if (closest) {
+    const dx = closest.x - p.x;
+    const dy = closest.y - p.y;
+    const len = Math.hypot(dx, dy) || 1;
+    p.dirX = dx / len;
+    p.dirY = dy / len;
+  }
 }
 
 /** The shovel lands: everything inside the arc, at this instant, dies. */

@@ -119,7 +119,10 @@ describe('the swing', () => {
     expect(s.stats.scorpionsKilled).toBe(1);
   });
 
-  it('misses a scorpion behind you', () => {
+  it('turns and connects with a scorpion behind you', () => {
+    // Facing only changes when you move, so requiring the player to be aimed
+    // already made the swing feel broken when standing still. It now aims at
+    // whatever is in reach; range, not orientation, is the skill.
     const s = atMound();
     s.player.dirX = 1;
     s.player.dirY = 0;
@@ -128,8 +131,8 @@ describe('the swing', () => {
     trySwing(s);
     land(s);
 
-    expect(s.scorpions).toHaveLength(1);
-    expect(s.coins).toBe(0);
+    expect(s.scorpions).toHaveLength(0);
+    expect(s.coins).toBe(CONFIG.scorpion.bounty);
   });
 
   it('misses a scorpion out of range', () => {
