@@ -36,6 +36,11 @@ export default function Projects() {
         <p className="mt-10 text-center text-sm font-light text-gray-400">
           Next up: the unit economics behind AI frontier models — coming soon.
         </p>
+
+        {/*
+          Freedom Pit lives at /freedompit and is deliberately unlinked — it is
+          shared by URL only. Adding a card here would undo that.
+        */}
       </div>
     </div>
   );
