@@ -54,16 +54,17 @@ export const CONFIG = {
      * back half is unsurvivable, and the truck's stationary load is a free hit.
      */
     regenAfter: 40,
-    swingRange: 58,
-    swingHalfAngle: 0.95, // radians
+    swingRange: 78,
+    swingHalfAngle: 1.25, // radians — a wide sweep, and it auto-aims besides
     /**
      * The shovel is heavy. Without this wind-up the swing resolves on the frame
      * you press it, and since it outranges a bite by 30-odd pixels, no scorpion
-     * could ever land a hit — they were a time tax rather than a threat.
+     * could ever land a hit — they were a time tax rather than a threat. Kept
+     * short: it only needs to make a lunge a genuine trade, not a lost fight.
      */
-    swingWindup: 0.08,
+    swingWindup: 0.06,
     swingDuration: 0.22,
-    swingCooldown: 0.45,
+    swingCooldown: 0.42,
   },
 
   truck: {
@@ -107,8 +108,8 @@ export const CONFIG = {
   },
 
   scorpion: {
-    spawnEvery: 16,
-    maxAlive: 4,
+    spawnEvery: 13,
+    maxAlive: 5,
     /** Slower than you, so you can always walk away from one. */
     speed: 110,
     radius: 11,
@@ -161,9 +162,18 @@ export const CONFIG = {
    * Pulse rate rises with force, so a gale sounds hurried as well as loud.
    */
   audio: {
-    maxGain: 0.42,
-    minCutoff: 260, // Hz — calm air is a distant rumble
-    maxCutoff: 1950, // Hz — a gale hisses
+    /**
+     * Measured, not guessed. The first pass used maxGain 0.42 with a force^1.25
+     * curve over brown noise low-passed at 260 Hz, which put ordinary wind at
+     * -38 dBFS — genuinely inaudible on laptop speakers. Pink noise carries far
+     * more mid-range, and this curve keeps normal weather around -23 dBFS while
+     * still leaving a gale roughly 9 dB louder.
+     */
+    maxGain: 0.85,
+    /** Exponent on force. Below 1 so the common mid-range is not crushed. */
+    curve: 0.7,
+    minCutoff: 500, // Hz — calm air, muffled
+    maxCutoff: 4000, // Hz — a gale hisses
     minPulse: 0.16, // Hz — one slow breath every six seconds
     maxPulse: 0.9,
     /** Depth of the pulse, as a fraction of the current level. */

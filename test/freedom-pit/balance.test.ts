@@ -246,7 +246,13 @@ describe('balance', () => {
     expect(windLoss).toBeGreaterThan(0.1); // wind has to actually cost you
     expect(windLoss).toBeLessThan(0.45); // but never feel futile
 
-    expect(mean(runs.map((r) => r.bites))).toBeGreaterThan(0.1); // scorpions can land hits
+    // Recalibrated when the swing was widened on request. This bot has
+    // one-frame reactions and the shovel now auto-aims, so it is close to
+    // unhittable — the rail is only asserting that scorpions can still land
+    // hits at all, not that they trouble a perfect player. A human's danger is
+    // not measurable here; that is what the playtest is for.
+    expect(mean(runs.map((r) => r.bites))).toBeGreaterThan(0.02);
+    expect(runs.some((r) => r.bites > 0)).toBe(true);
     expect(mean(runs.map((r) => r.quota))).toBeGreaterThan(CONFIG.quota.initial); // foremen bite
   });
 });

@@ -25,9 +25,9 @@ export function windSoundParams(force: number, gusting = false): WindSoundParams
   const cfg = CONFIG.audio;
   const f = clamp01(force);
 
-  // Slightly superlinear, so calm air stays genuinely in the background and the
-  // loud end of the range has somewhere to go.
-  const boosted = Math.pow(f, 1.25) * (gusting ? cfg.gustBoost : 1);
+  // Sub-linear: wind sits around 0.22 most of the time, and a superlinear curve
+  // buried exactly that range below the noise floor.
+  const boosted = Math.pow(f, cfg.curve) * (gusting ? cfg.gustBoost : 1);
   const gain = Math.min(cfg.maxGain, cfg.maxGain * boosted);
 
   return {

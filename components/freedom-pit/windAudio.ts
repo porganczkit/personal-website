@@ -25,18 +25,36 @@ export function isAudioSupported(): boolean {
   return audioContextCtor() !== null;
 }
 
-/** A couple of seconds of brown noise — closer to moving air than white noise. */
+/**
+ * A few seconds of pink noise. Pink (-3 dB/octave) rather than brown
+ * (-6 dB/octave): brown is nearly all sub-300 Hz rumble, which laptop speakers
+ * barely reproduce and the ear is insensitive to, so it measured as sound and
+ * was heard as silence. Paul Kellet's filter, the usual recipe.
+ */
 function createNoiseBuffer(ctx: AudioContext): AudioBuffer {
   const seconds = 3;
-  const length = ctx.sampleRate * seconds;
+  const length = Math.floor(ctx.sampleRate * seconds);
   const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
   const data = buffer.getChannelData(0);
 
-  let last = 0;
+  let b0 = 0;
+  let b1 = 0;
+  let b2 = 0;
+  let b3 = 0;
+  let b4 = 0;
+  let b5 = 0;
+  let b6 = 0;
+
   for (let i = 0; i < length; i++) {
     const white = Math.random() * 2 - 1;
-    last = (last + 0.02 * white) / 1.02;
-    data[i] = last * 3.5;
+    b0 = 0.99886 * b0 + white * 0.0555179;
+    b1 = 0.99332 * b1 + white * 0.0750759;
+    b2 = 0.969 * b2 + white * 0.153852;
+    b3 = 0.8665 * b3 + white * 0.3104856;
+    b4 = 0.55 * b4 + white * 0.5329522;
+    b5 = -0.7616 * b5 - white * 0.016898;
+    data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+    b6 = white * 0.115926;
   }
 
   // Cross-fade the tail into the head so the loop point is inaudible.
@@ -44,6 +62,15 @@ function createNoiseBuffer(ctx: AudioContext): AudioBuffer {
   for (let i = 0; i < fade; i++) {
     const t = i / fade;
     data[i] = data[i] * t + data[length - fade + i] * (1 - t);
+  }
+
+  // Normalise, so the gain values downstream mean what they say rather than
+  // depending on whatever amplitude the noise recipe happened to produce.
+  let peak = 0;
+  for (let i = 0; i < length; i++) peak = Math.max(peak, Math.abs(data[i]));
+  if (peak > 0) {
+    const scale = 0.95 / peak;
+    for (let i = 0; i < length; i++) data[i] *= scale;
   }
 
   return buffer;
