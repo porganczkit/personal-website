@@ -29,6 +29,7 @@ export default function FreedomPit() {
   const [hud, setHud] = useState<HudModel | null>(null);
   const [best, setBest] = useState<number | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [audioStatus, setAudioStatus] = useState<ReturnType<WindAudio['status']> | null>(null);
   // null until measured on the client, so the server and first paint agree.
   const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
 
@@ -122,6 +123,27 @@ export default function FreedomPit() {
     };
   }, [isDesktop]);
 
+  // Polled on its own timer rather than from the game loop: a blocked context
+  // most needs reporting exactly when the loop is not running.
+  useEffect(() => {
+    if (!isDesktop) return;
+    const id = window.setInterval(() => setAudioStatus(audioRef.current?.status() ?? null), 250);
+    return () => window.clearInterval(id);
+  }, [isDesktop]);
+
+  // Autoplay policies can leave the context suspended even when it was created
+  // inside a click, and Safari is stricter still. Any interaction retries it.
+  useEffect(() => {
+    if (!isDesktop) return;
+    const retry = () => void audioRef.current?.resume();
+    window.addEventListener('pointerdown', retry);
+    window.addEventListener('keydown', retry);
+    return () => {
+      window.removeEventListener('pointerdown', retry);
+      window.removeEventListener('keydown', retry);
+    };
+  }, [isDesktop]);
+
   useEffect(() => {
     audioRef.current?.setMuted(muted);
     try {
@@ -202,6 +224,9 @@ export default function FreedomPit() {
     onRender,
   });
 
+  const debug =
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
+
   if (isDesktop === null) return <div className="min-h-[60vh]" />;
   if (!isDesktop) return <DesktopOnly />;
 
@@ -220,15 +245,38 @@ export default function FreedomPit() {
         {screen === 'playing' && hud && <Hud hud={hud} />}
 
         {isAudioSupported() && (
-          <button
-            onClick={() => setMuted((m) => !m)}
-            aria-pressed={muted}
-            aria-label={muted ? 'Unmute the wind' : 'Mute the wind'}
-            title={muted ? 'Unmute the wind' : 'Mute the wind'}
-            className="absolute bottom-3 right-3 z-10 rounded-sm border border-white/20 bg-black/50 px-2.5 py-1.5 text-sm text-white/70 backdrop-blur-sm transition-colors hover:border-gold-400 hover:text-gold-400"
-          >
-            {muted ? '🔇' : '🔊'}
-          </button>
+          <div className="absolute bottom-3 right-3 z-10 flex items-center gap-2">
+            {/* Silence has several causes and they look identical from outside,
+                so the state is stated rather than left to be inferred. */}
+            {/* 'not-started' is normal before the first click; 'suspended'
+                means it was built and then refused. */}
+            {audioStatus && audioStatus.state === 'suspended' && !muted && (
+              <button
+                onClick={() => void audioRef.current?.start()}
+                className="rounded-sm border border-gold-400 bg-gold-400/90 px-3 py-1.5 text-xs font-medium text-gray-900 transition-colors hover:bg-gold-400"
+              >
+                Sound blocked — click to enable
+              </button>
+            )}
+            {debug && audioStatus && (
+              <span className="rounded-sm bg-black/60 px-2 py-1 font-mono text-[10px] text-white/60">
+                {audioStatus.state} gain={audioStatus.gain.toFixed(3)}
+              </span>
+            )}
+            <button
+              onClick={() => setMuted((m) => !m)}
+              aria-pressed={muted}
+              aria-label={muted ? 'Unmute the wind' : 'Mute the wind'}
+              title={muted ? 'Unmute the wind' : 'Mute the wind'}
+              className={`rounded-sm border px-2.5 py-1.5 text-sm backdrop-blur-sm transition-colors ${
+                muted
+                  ? 'border-red-400/70 bg-red-900/70 text-red-200'
+                  : 'border-white/20 bg-black/50 text-white/70 hover:border-gold-400 hover:text-gold-400'
+              }`}
+            >
+              {muted ? '🔇 Muted' : '🔊'}
+            </button>
+          </div>
         )}
 
         {screen === 'title' && <TitleScreen onStart={start} best={best} />}

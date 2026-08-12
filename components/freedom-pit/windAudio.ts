@@ -91,6 +91,21 @@ export class WindAudio {
     return isAudioSupported();
   }
 
+  /**
+   * What the audio is actually doing. Surfaced on screen because "I hear
+   * nothing" has at least four different causes — never built, blocked by
+   * autoplay policy, muted, or simply too quiet — and they are indistinguishable
+   * from the outside.
+   */
+  status(): { supported: boolean; state: string; muted: boolean; gain: number } {
+    return {
+      supported: isAudioSupported(),
+      state: this.ctx ? this.ctx.state : 'not-started',
+      muted: this.muted,
+      gain: this.master ? this.master.gain.value : 0,
+    };
+  }
+
   /** Safe to call repeatedly; only the first call builds the graph. */
   async start(): Promise<void> {
     if (this.disposed || this.ctx) {
