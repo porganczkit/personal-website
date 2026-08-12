@@ -481,14 +481,29 @@ export function draw(
   actors.sort((a, b) => a.y - b.y);
   for (const a of actors) a.render();
 
-  // Something is on the cab and about to reach you.
+  // Something is on the cab and about to reach you. Drawn loudly: this is the
+  // only moment in the truck when you are vulnerable at all.
   if (p.climbing > 0) {
     const t = p.climbing / CONFIG.truck.climbTime;
-    ctx.strokeStyle = `rgba(220,60,40,${0.5 + t * 0.5})`;
-    ctx.lineWidth = 3;
+    const cx = p.x - camX;
+    ctx.strokeStyle = 'rgba(220,60,40,0.25)';
+    ctx.lineWidth = 6;
     ctx.beginPath();
-    ctx.arc(p.x - camX, p.y, 34, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * t);
+    ctx.arc(cx, p.y, 38, 0, Math.PI * 2);
     ctx.stroke();
+
+    ctx.strokeStyle = `rgba(235,70,45,${0.65 + t * 0.35})`;
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(cx, p.y, 38, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * t);
+    ctx.stroke();
+
+    if (!opts.reducedMotion && Math.floor(state.time * 8) % 2 === 0) {
+      ctx.fillStyle = 'rgba(235,70,45,0.9)';
+      ctx.font = 'bold 13px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('DRIVE OFF', cx, p.y - 48);
+    }
   }
 
   if (!opts.reducedMotion) drawWind(ctx, state, camX, w, h);

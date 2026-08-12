@@ -258,6 +258,16 @@ export default function FreedomPit() {
                 Sound blocked — click to enable
               </button>
             )}
+            <button
+              onClick={() => {
+                setMuted(false);
+                void audioRef.current?.start().then(() => audioRef.current?.testTone());
+              }}
+              title="Play a test sound"
+              className="rounded-sm border border-white/20 bg-black/50 px-2.5 py-1.5 text-xs text-white/70 backdrop-blur-sm transition-colors hover:border-gold-400 hover:text-gold-400"
+            >
+              Test sound
+            </button>
             {debug && audioStatus && (
               <span className="rounded-sm bg-black/60 px-2 py-1 font-mono text-[10px] text-white/60">
                 {audioStatus.state} gain={audioStatus.gain.toFixed(3)}

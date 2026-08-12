@@ -384,6 +384,9 @@ export function updateScorpions(state: GameState, dt: number): void {
         // In the cab you are untouchable, until you park at a loader — then it
         // climbs. Pull away in time and it falls off; the load is the cost.
         if (p.loading) {
+          // Announce the climb: without this the rule is invisible, and a bite
+          // that only lands while loading looks like random chance.
+          if (p.climbing === 0) say(state, 'Scorpion climbing the cab — pull away!', 'bad');
           p.climbing += dt;
           if (p.climbing >= CONFIG.truck.climbTime) {
             p.climbing = 0;

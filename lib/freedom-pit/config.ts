@@ -169,9 +169,14 @@ export const CONFIG = {
      * more mid-range, and this curve keeps normal weather around -23 dBFS while
      * still leaving a gale roughly 9 dB louder.
      */
-    maxGain: 0.85,
-    /** Exponent on force. Below 1 so the common mid-range is not crushed. */
-    curve: 0.7,
+    maxGain: 1,
+    /**
+     * Exponent on force. Well below 1: wind sits near 0.22 almost all the time,
+     * and even 0.7 left ordinary weather at -23 dBFS, which was still being
+     * reported as silence. At 0.45 it lands near -18.6 dBFS — unmistakably
+     * present — while a gale reaches -13 without clipping the normalised noise.
+     */
+    curve: 0.45,
     minCutoff: 500, // Hz — calm air, muffled
     maxCutoff: 4000, // Hz — a gale hisses
     minPulse: 0.16, // Hz — one slow breath every six seconds

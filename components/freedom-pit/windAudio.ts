@@ -86,6 +86,7 @@ export class WindAudio {
   private lfoToCutoff: GainNode | null = null;
   private muted = false;
   private disposed = false;
+  private testingUntil = 0;
 
   get supported(): boolean {
     return isAudioSupported();
@@ -160,10 +161,36 @@ export class WindAudio {
     await this.resume();
   }
 
+  /**
+   * An unmissable burst, ignoring wind and mute. "I hear nothing" cannot be
+   * diagnosed from the outside — if this is inaudible the problem is the output
+   * device or system volume, and if it is audible the wind is merely too subtle.
+   */
+  testTone(): void {
+    const { ctx, master, filter } = this;
+    if (!ctx || !master || !filter) return;
+    void this.resume();
+
+    const now = ctx.currentTime;
+    const duration = 1.5;
+    this.testingUntil = now + duration;
+
+    filter.frequency.cancelScheduledValues(now);
+    filter.frequency.setTargetAtTime(2600, now, 0.05);
+
+    master.gain.cancelScheduledValues(now);
+    // exponentialRamp cannot touch zero, hence the small floor.
+    master.gain.setValueAtTime(Math.max(master.gain.value, 0.0005), now);
+    master.gain.exponentialRampToValueAtTime(0.9, now + 0.12);
+    master.gain.exponentialRampToValueAtTime(0.0005, now + duration);
+  }
+
   /** Push the current wind strength into the graph. Cheap; call often. */
   setForce(force: number, gusting: boolean): void {
     const { ctx, master, filter, lfo, lfoToGain, lfoToCutoff } = this;
     if (!ctx || !master || !filter || !lfo || !lfoToGain || !lfoToCutoff) return;
+    // Do not fight a test burst that is still ringing out.
+    if (ctx.currentTime < this.testingUntil) return;
 
     const p = windSoundParams(force, gusting);
     const now = ctx.currentTime;

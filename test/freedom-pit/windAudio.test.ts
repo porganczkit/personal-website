@@ -18,6 +18,19 @@ class FakeParam {
     this.history.push(target);
     return this;
   }
+  setValueAtTime(target: number) {
+    this.value = target;
+    return this;
+  }
+  exponentialRampToValueAtTime(target: number) {
+    // Good enough for assertions: record the destination of the ramp.
+    this.value = target;
+    this.history.push(target);
+    return this;
+  }
+  cancelScheduledValues() {
+    return this;
+  }
 }
 
 class FakeNode {
@@ -212,6 +225,35 @@ describe('wind audio graph', () => {
       expect(g.master.gain.value).toBeLessThanOrEqual(CONFIG.audio.maxGain);
       expect(g.master.gain.value).toBeGreaterThanOrEqual(0);
     }
+  });
+
+  it('plays an audible test burst, whatever the wind is doing', async () => {
+    audio = new WindAudio();
+    await audio.start();
+    const g = inside(audio);
+
+    audio.setForce(0.01, false); // near silence
+    audio.testTone();
+
+    // The ramp peaks far above anything the wind model would ask for.
+    expect(Math.max(...g.master.gain.history)).toBeGreaterThan(0.8);
+  });
+
+  it('does not let the wind stamp on a test burst still ringing out', async () => {
+    audio = new WindAudio();
+    await audio.start();
+    const g = inside(audio);
+
+    audio.testTone();
+    const during = g.master.gain.value;
+    audio.setForce(0.01, false); // would otherwise drop it to near zero
+
+    expect(g.master.gain.value).toBe(during);
+  });
+
+  it('tolerates a test burst before the graph exists', () => {
+    audio = new WindAudio();
+    expect(() => audio!.testTone()).not.toThrow();
   });
 
   it('tolerates setForce before start, rather than throwing mid-frame', () => {
